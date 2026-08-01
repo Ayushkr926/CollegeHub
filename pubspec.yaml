@@ -16,8 +16,11 @@ dependencies:
   provider: ^6.1.2
   url_launcher: ^6.3.1
   flip_card: ^0.7.0
+  intl: ^0.20.2
+  file_picker: ^8.0.0
   dio: ^5.11.0
   shared_preferences: ^2.5.5
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:
@@ -31,3 +34,6 @@ flutter:
     - assets/images/
     - assets/images/onboarding.jpg
     - assets/images/Memo.jpg
+    - assets/images/Stitch/
+    - assets/images/Stitch/
+    - assets/images/Stitch/hey1.png

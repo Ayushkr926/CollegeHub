@@ -175,11 +175,11 @@ class RegisterProvider extends ChangeNotifier {
 
         debugPrint("Saving user to LocalStorage...");
         debugPrint("Token: ${auth.token}");
-        debugPrint("Student: ${auth.student.toJson()}");
+        debugPrint("Student: ${auth.user.toJson()}");
 
         await LocalStorageService.instance.setModel(
           StorageKeys.userProfile,
-          auth.student,
+          auth.user,
               (s) => s.toJson(),
         );
 

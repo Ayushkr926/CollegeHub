@@ -79,12 +79,17 @@ class LoginProvider extends ChangeNotifier {
 
         await LocalStorageService.instance.setModel(
           StorageKeys.userProfile,
-          auth.student,
+          auth.user,
               (s) => s.toJson(),
         );
         await LocalStorageService.instance.setString(
           StorageKeys.authToken,
           auth.token,
+        );
+        print("role is ${auth.user.role}");
+        await LocalStorageService.instance.setString(
+          StorageKeys.userrole,
+          auth.user.role == Role.clubHead ? "organiser":"student",
         );
         await LocalStorageService.instance.setBool(
           StorageKeys.isLoggedIn,
@@ -92,8 +97,6 @@ class LoginProvider extends ChangeNotifier {
         );
 
         if (context.mounted) {
-          // Clears the whole nav stack so Back doesn't return to the login
-          // screen once the user is authenticated.
           Navigator.pushNamedAndRemoveUntil(
             context,
             AppRoutes.home,

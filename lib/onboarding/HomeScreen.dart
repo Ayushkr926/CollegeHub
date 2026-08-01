@@ -1,3 +1,4 @@
+import 'package:college/notice/screens/splashscreen_notice.dart';
 import 'package:flutter/material.dart';
 
 import '../BottomNav/animated_bottom_bar.dart';
@@ -221,7 +222,18 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             _circleButton(Icons.chat_bubble_outline_rounded),
             const SizedBox(width: 10),
-            _circleButton(Icons.notifications_none_rounded, dot: true),
+            GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SplashScreen_notice(
+                        heroAssetPath: "assets/images/Stitch/hey1.png",
+                      ),
+                    ),
+                  );
+                },
+                child: _circleButton(Icons.notifications_none_rounded, dot: true)),
           ],
         ),
 

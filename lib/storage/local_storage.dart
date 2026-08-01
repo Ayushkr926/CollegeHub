@@ -32,6 +32,7 @@ class StorageKeys {
 
   static const String username = 'username';
   static const String authToken = 'auth_token';
+  static const String userrole = 'role';
   static const String isLoggedIn = 'is_logged_in';
   static const String themeMode = 'theme_mode';
   static const String onboardingComplete = 'onboarding_complete';

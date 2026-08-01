@@ -18,7 +18,7 @@ import '../../utils/validators.dart';
 /// Displays the app logo, name and tagline with a fade + scale entrance,
 /// then automatically navigates to Onboarding after a short delay.
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  const SplashScreen({super.key,});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();

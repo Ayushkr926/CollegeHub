@@ -1,32 +1,56 @@
-import 'package:college/Screen/Auth/authentication.dart';
+import 'package:college/storage/local_storage.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/app_routes.dart';
 import 'bottom_bar_painter.dart';
 import 'center_fab.dart';
 import 'nav_item.dart';
 
 class AnimatedBottomBar extends StatefulWidget {
   final int selectedIndex;
-  const AnimatedBottomBar({super.key, this.selectedIndex=0});
+  final String? role;
+
+  const AnimatedBottomBar({
+    super.key,
+    this.selectedIndex = 0,
+    this.role,
+  });
 
   @override
-  State<AnimatedBottomBar> createState() =>
-      _AnimatedBottomBarState();
+  State<AnimatedBottomBar> createState() => _AnimatedBottomBarState();
 }
 
 class _AnimatedBottomBarState extends State<AnimatedBottomBar> {
-  late int selected = widget.selectedIndex;
+  late int selected;
+  String? role;
+
+  @override
+  void initState() {
+    super.initState();
+    selected = widget.selectedIndex;
+    checkRole();
+  }
+
+  Future<void> checkRole() async {
+    final storedRole =
+    await LocalStorageService.instance.getString("role");
+
+    if (!mounted) return;
+
+    setState(() {
+      role = storedRole;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.transparent,
+    print("role is ${role}");
+    return SizedBox(
       height: 95,
       child: Stack(
         clipBehavior: Clip.none,
         alignment: Alignment.topCenter,
         children: [
-
           Positioned.fill(
             top: 18,
             child: CustomPaint(
@@ -47,10 +71,9 @@ class _AnimatedBottomBarState extends State<AnimatedBottomBar> {
                     title: "Discover",
                     active: selected == 0,
                     onTap: () {
-                      setState(() {
-                        selected = 0;
-                      });
-                      Navigator.pushNamed(context, AppRoutes.home);
+                      setState(() => selected = 0);
+                      Navigator.pushReplacementNamed(
+                          context, AppRoutes.home);
                     },
                   ),
                 ),
@@ -61,10 +84,9 @@ class _AnimatedBottomBarState extends State<AnimatedBottomBar> {
                     title: "Request",
                     active: selected == 1,
                     onTap: () {
-                      setState(() {
-                        selected = 1;
-                      });
-                      Navigator.pushNamed(context, AppRoutes.request);
+                      setState(() => selected = 1);
+                      Navigator.pushReplacementNamed(
+                          context, AppRoutes.request);
                     },
                   ),
                 ),
@@ -73,14 +95,13 @@ class _AnimatedBottomBarState extends State<AnimatedBottomBar> {
 
                 Expanded(
                   child: NavItem(
-                    icon: Icons.people_sharp,
+                    icon: Icons.people,
                     title: "Clubs",
                     active: selected == 2,
                     onTap: () {
-                      setState(() {
-                        selected = 2;
-                      });
-                      Navigator.pushNamed(context, AppRoutes.clubs);
+                      setState(() => selected = 2);
+                      Navigator.pushReplacementNamed(
+                          context, AppRoutes.clubs);
                     },
                   ),
                 ),
@@ -91,10 +112,14 @@ class _AnimatedBottomBarState extends State<AnimatedBottomBar> {
                     title: "Profile",
                     active: selected == 3,
                     onTap: () {
-                      setState(() {
-                        selected = 3;
-                      });
-                      Navigator.pushNamed(context, AppRoutes.stuprofile);
+                      setState(() => selected = 3);
+
+                      Navigator.pushReplacementNamed(
+                        context,
+                        role == "organiser"
+                            ? AppRoutes.clubprofile
+                            : AppRoutes.stuprofile,
+                      );
                     },
                   ),
                 ),

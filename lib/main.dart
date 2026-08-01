@@ -8,16 +8,15 @@ import 'package:college/utils/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:college/Notices/homescreen/provider/home_provider.dart';
+import 'notice/providers/notice_provider.dart';
+import 'notice/repositories/notice_repository.dart';
+import 'notice/services/notice_api_service.dart';
 import 'Provider/Create_event_provider.dart';
+import 'Provider/profile_provider_student.dart';
+import 'Screen/Auth/provider/club_registration.dart';
 import 'Screen/Auth/provider/login_provider.dart';
-import 'Screen/Auth/select_role_screen.dart';
-import 'Screen/Auth/student_registration_screen.dart';
-import 'Screen/Clubs/discover_clubs_screen.dart';
-import 'Screen/Events/createevent.dart';
-import 'Screen/Profile/Profilescreen.dart';
-import 'Screen/Profile/studentprofile.dart';
-import 'Screen/Request/requestscreen.dart';
-import 'onboarding/onboarding_screen.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,7 +31,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
+    final noticeApiService = NoticeApiService(
+    );
+    final noticeRepository = NoticeRepository(
+      apiService: noticeApiService,
+    );
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(
@@ -50,6 +53,10 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => LoginProvider(),
         ),
+        ChangeNotifierProvider(create: (_) => ProfileProvider()),
+        ChangeNotifierProvider(create: (_) => ClubRegistrationProvider()),
+        ChangeNotifierProvider(create: (_) => HomeFeedProvider()),
+        ChangeNotifierProvider(create: (_) => NoticeProvider(repository: noticeRepository)),
       ],
       child: MaterialApp(
         title: 'Premium Onboarding',

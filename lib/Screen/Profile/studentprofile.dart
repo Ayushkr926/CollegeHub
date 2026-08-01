@@ -1,11 +1,30 @@
-
+// -----------------------------------------------------------------------
+// WHAT CHANGED vs the previous version
+// -----------------------------------------------------------------------
+// 1. Nothing renders an empty row/section anymore. Bio, website, joined
+//    clubs, and every academic field individually check for content —
+//    if a field is empty it's simply not built, so there's no blank
+//    label, no orphan divider, no dead whitespace sitting in the layout.
+// 2. AcademicInfoTab and the "joined clubs" section now show a proper
+//    empty state (icon + message) only when there is genuinely nothing
+//    to show at all, instead of a card full of "—" placeholders.
+// 3. First-load now shows a shimmer skeleton (avatar + name + bio
+//    outlines) instead of a bare spinner — reads as "loading your
+//    profile" rather than "something is broken".
+// 4. Error banner now has a Retry action instead of just sitting there.
+// 5. Avatar has a shimmer placeholder while the network image loads,
+//    and a graceful fallback icon if it fails — so a bad/missing
+//    avatarUrl never leaves a broken-image icon on screen.
+// -----------------------------------------------------------------------
 
 import 'package:flip_card/flip_card.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../BottomNav/animated_bottom_bar.dart';
-
-
+import '../../Model/participation_entry.dart';
+import '../../Provider/profile_provider_student.dart';
+import 'edit_profile.dart';
 
 class AppColors {
   static const bg = Colors.black;
@@ -19,50 +38,10 @@ class AppColors {
   static const silver = Color(0xFFC0C4CC);
   static const bronze = Color(0xFFCD8B57);
   static const neutralRank = Color(0xFF6F87FF);
+  static const errorRed = Color(0xFFE85B5B);
+  static const shimmerBase = Color(0xFF1A1A1A);
+  static const shimmerHighlight = Color(0xFF262626);
 }
-
-enum RankTier { gold, silver, bronze, participant }
-
-class ParticipationEntry {
-  final String eventName;
-  final String date;
-  final String position;
-  final RankTier tier;
-
-  const ParticipationEntry({
-    required this.eventName,
-    required this.date,
-    required this.position,
-    required this.tier,
-  });
-}
-
-const List<ParticipationEntry> _participationData = [
-  ParticipationEntry(
-    eventName: 'Flutter Hackathon 2024',
-    date: 'Sept 12, 2024',
-    position: '1st Place',
-    tier: RankTier.gold,
-  ),
-  ParticipationEntry(
-    eventName: 'UI/UX Design Sprint',
-    date: 'Aug 5, 2024',
-    position: '2nd Place',
-    tier: RankTier.silver,
-  ),
-  ParticipationEntry(
-    eventName: 'CodeFest Annual',
-    date: 'Mar 20, 2024',
-    position: '3rd Place',
-    tier: RankTier.bronze,
-  ),
-  ParticipationEntry(
-    eventName: 'Web Dev Bootcamp Challenge',
-    date: 'Jan 15, 2024',
-    position: 'Participant',
-    tier: RankTier.participant,
-  ),
-];
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -79,6 +58,12 @@ class _ProfileScreenState extends State<ProfileScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+
+    // Cache-first load: shows saved-from-login/registration data
+    // instantly if present, then silently syncs with the API.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ProfileProvider>().loadProfile();
+    });
   }
 
   @override
@@ -87,64 +72,306 @@ class _ProfileScreenState extends State<ProfileScreen>
     super.dispose();
   }
 
+  Future<void> _handleRefresh() {
+    return context.read<ProfileProvider>().refreshProfile();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final profile = context.watch<ProfileProvider>();
+
+    // Only show the skeleton when we truly have nothing to display yet
+    // (first-ever load, no cache). Otherwise we always show whatever
+    // data we have and let pull-to-refresh / background sync handle
+    // updates quietly, without ever blanking the screen.
+    final showSkeleton = profile.isLoading && !profile.hasProfile;
+
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
-        child: Column(
+        child: showSkeleton
+            ? const _ProfileSkeleton()
+            : Column(
           children: [
             const _TopBar(),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: profile.error != null
+                  ? _ErrorBanner(
+                key: ValueKey(profile.error),
+                message: profile.error!,
+                onRetry: _handleRefresh,
+              )
+                  : const SizedBox.shrink(key: ValueKey('no-error')),
+            ),
             Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 12),
-                    const _ProfileHeader(),
-                    const SizedBox(height: 20),
-                    _CustomTabBar(controller: _tabController),
-                    const Divider(height: 1, color: AppColors.divider),
-                    const SizedBox(height: 20),
-                    // Fixed-height area so both tabs render without a
-                    // scrollable-inside-scrollable conflict.
-                    SizedBox(
-                      height: 520,
-                      child: TabBarView(
-                        controller: _tabController,
-                        children: const [
-                          AcademicInfoTab(),
-                          ParticipationTab(),
-                        ],
+              child: RefreshIndicator(
+                onRefresh: _handleRefresh,
+                color: Colors.black,
+                backgroundColor: Colors.white,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 12),
+                      const _ProfileHeader(),
+                      const SizedBox(height: 20),
+                      _CustomTabBar(controller: _tabController),
+                      const Divider(height: 1, color: AppColors.divider),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        height: 520,
+                        child: TabBarView(
+                          controller: _tabController,
+                          children: const [
+                            AcademicInfoTab(),
+                            ParticipationTab(),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
               ),
             ),
           ],
         ),
       ),
-
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: const AnimatedBottomBar(),
+      floatingActionButton: const Padding(
+        padding: EdgeInsets.all(8.0),
+        child: AnimatedBottomBar(),
       ),
-      floatingActionButtonLocation:
-      FloatingActionButtonLocation.centerDocked,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+    );
+  }
+}
+
+// ---------- Shimmer primitives ----------
+// Lightweight shimmer effect, no extra package required.
+class _Shimmer extends StatefulWidget {
+  final Widget child;
+  const _Shimmer({required this.child});
+
+  @override
+  State<_Shimmer> createState() => _ShimmerState();
+}
+
+class _ShimmerState extends State<_Shimmer> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (bounds) {
+            final t = _controller.value;
+            return LinearGradient(
+              colors: const [
+                AppColors.shimmerBase,
+                AppColors.shimmerHighlight,
+                AppColors.shimmerBase,
+              ],
+              stops: const [0.35, 0.5, 0.65],
+              begin: Alignment(-1 - t * 2, 0),
+              end: Alignment(1 - t * 2, 0),
+            ).createShader(bounds);
+          },
+          child: child,
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
+class _ShimmerBlock extends StatelessWidget {
+  final double width;
+  final double height;
+  final double radius;
+  const _ShimmerBlock({
+    required this.width,
+    required this.height,
+    this.radius = 8,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: AppColors.shimmerBase,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
+  }
+}
+
+// Full first-load skeleton, mirrors the real layout so there's no jump
+// when real data replaces it.
+class _ProfileSkeleton extends StatelessWidget {
+  const _ProfileSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Shimmer(
+      child: Column(
+        children: [
+          const _TopBar(),
+          const SizedBox(height: 24),
+          const _ShimmerBlock(width: 148, height: 148, radius: 74),
+          const SizedBox(height: 30),
+          const _ShimmerBlock(width: 180, height: 22),
+          const SizedBox(height: 10),
+          const _ShimmerBlock(width: 110, height: 14),
+          const SizedBox(height: 20),
+          const _ShimmerBlock(width: 260, height: 14),
+          const SizedBox(height: 8),
+          const _ShimmerBlock(width: 220, height: 14),
+          const Spacer(),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------- Error banner ----------
+// Shown when a background/pull-to-refresh sync fails. Non-blocking —
+// the rest of the (cached) profile stays fully visible and usable.
+class _ErrorBanner extends StatelessWidget {
+  final String message;
+  final Future<void> Function() onRetry;
+  const _ErrorBanner({super.key, required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.errorRed.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.errorRed.withOpacity(0.35)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.wifi_off_rounded, size: 16, color: AppColors.errorRed),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: AppColors.errorRed,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: onRetry,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text(
+              'RETRY',
+              style: TextStyle(
+                color: AppColors.errorRed,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------- Generic empty state ----------
+// Used anywhere a section has no data, so the UI always reads as
+// intentional rather than leaving raw blank space.
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  const _EmptyState({required this.icon, required this.title, this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.cardBorder),
+              ),
+              child: Icon(icon, color: AppColors.textMuted, size: 24),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                subtitle!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12.5,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
 
 // ---------- Top bar ----------
 class _TopBar extends StatelessWidget {
+
   const _TopBar();
 
   @override
   Widget build(BuildContext context) {
+    final profile = context.watch<ProfileProvider>();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 1),
       child: Row(
         children: [
           Container(
@@ -159,27 +386,13 @@ class _TopBar extends StatelessWidget {
               ],
             ),
             child: CircleAvatar(
-              radius: 24,
-              backgroundColor: const Color(0xFF1E1E1E),
-              child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.15),
-                    width: 1.2,
-                  ),
-                ),
-                child: ClipOval(
-                  child: Image.asset(
-                    "assets/images/onboarding.jpg",
-                    width: 35,
-                    height: 35,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-            ),
+              radius: 20,
+              backgroundColor: Colors.grey.shade200,
+              backgroundImage: (profile.avatarUrl?.isNotEmpty ?? false)
+                  ? NetworkImage(profile.avatarUrl!)
+                  : const AssetImage("assets/images/Memo.jpg") as ImageProvider,
+              onBackgroundImageError: (_, __) {},
+            )
           ),
           const SizedBox(width: 14),
           const Text(
@@ -192,7 +405,36 @@ class _TopBar extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          const Icon(Icons.settings, color: Colors.white, size: 24),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                );
+              },
+              child: const Padding(
+                padding: EdgeInsets.all(4.0),
+                child: Icon(Icons.edit, color: Colors.white, size: 24),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 20,),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () {
+
+              },
+              child: const Padding(
+                padding: EdgeInsets.all(4.0),
+                child: Icon(Icons.settings, color: Colors.white, size: 24),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -213,20 +455,14 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
   @override
   void initState() {
     super.initState();
-
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Wait a little after the screen appears
       await Future.delayed(const Duration(milliseconds: 400));
-
-      // First Flip
       _flipKey.currentState?.toggleCard();
-
       await Future.delayed(const Duration(milliseconds: 800));
-
-      // Second Flip (back to front)
       _flipKey.currentState?.toggleCard();
     });
   }
+
   Widget _avatar(ImageProvider image) {
     return Container(
       width: 148,
@@ -251,10 +487,7 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: LinearGradient(
-            colors: [
-              Colors.white,
-              Colors.grey.shade300,
-            ],
+            colors: [Colors.white, Colors.grey.shade300],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -271,6 +504,16 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
               fit: BoxFit.cover,
               width: double.infinity,
               height: double.infinity,
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return const _Shimmer(
+                  child: ColoredBox(color: AppColors.shimmerBase),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) => Container(
+                color: const Color(0xFF0F0F0F),
+                child: const Icon(Icons.person, color: Colors.white54, size: 48),
+              ),
             ),
           ),
         ),
@@ -280,29 +523,32 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
 
   @override
   Widget build(BuildContext context) {
+    final profile = context.watch<ProfileProvider>();
+
+    final ImageProvider frontImage = profile.avatarUrl.isNotEmpty
+        ? NetworkImage(profile.avatarUrl)
+        : AssetImage(profile.avatarAsset) as ImageProvider;
+
+    final hasBio = profile.bio.trim().isNotEmpty;
+    final hasWebsite = profile.website.trim().isNotEmpty;
+    final hasUsername = profile.username.trim().isNotEmpty;
+    final hasRoleBadge = profile.roleBadge.trim().isNotEmpty;
+    final hasJoinedClubs = profile.joinedClubs.isNotEmpty;
+
     return Column(
       children: [
         Stack(
           clipBehavior: Clip.none,
           alignment: Alignment.center,
           children: [
-            /// Avatar
             FlipCard(
               key: _flipKey,
               speed: 500,
               direction: FlipDirection.HORIZONTAL,
               fill: Fill.fillBack,
-              front: _avatar(
-                const NetworkImage(
-                  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&q=80",
-                ),
-              ),
-              back: _avatar(
-                const AssetImage("assets/images/Memo.jpg"),
-              ),
+              front: _avatar(frontImage),
+              back: _avatar(AssetImage(profile.avatarAsset)),
             ),
-
-            /// Verified Badge
             Positioned(
               bottom: 14,
               right: 10,
@@ -312,10 +558,7 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: const Color(0xFF121212),
-                    width: 2,
-                  ),
+                  border: Border.all(color: const Color(0xFF121212), width: 2),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(.35),
@@ -330,197 +573,146 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
                 ),
               ),
             ),
-
-            /// Role Badge
-            Positioned(
-              bottom: -12,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(.35),
-                      blurRadius: 15,
-                      offset: const Offset(0, 6),
+            if (hasRoleBadge)
+              Positioned(
+                bottom: -12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(.35),
+                        blurRadius: 15,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    profile.roleBadge,
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.3,
                     ),
-                  ],
-                ),
-                child: const Text(
-                  "GDSC",
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.3,
                   ),
                 ),
               ),
-            ),
           ],
         ),
-
         const SizedBox(height: 30),
-
-        const Text(
-          "Alex Sterling",
-          style: TextStyle(
+        Text(
+          profile.fullName.isNotEmpty ? profile.fullName : 'Unnamed Student',
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 28,
             fontWeight: FontWeight.w800,
             letterSpacing: -.5,
           ),
         ),
-
-        const SizedBox(height: 8),
-
-        Text(
-          "@alexsterling",
-          style: TextStyle(
-            color: Colors.grey.shade500,
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-
-        const SizedBox(height: 18),
-
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 28),
-          child: Text(
-            "Aspiring Software Engineer & UI Enthusiast.\nPassionate about building community-driven technology and creating meaningful experiences for students.",
-            textAlign: TextAlign.center,
+        if (hasUsername) ...[
+          const SizedBox(height: 8),
+          Text(
+            profile.username,
             style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 14.5,
-              height: 1.6,
+              color: Colors.grey.shade500,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        ),
-
-        const SizedBox(height: 18),
-
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.language_rounded,
-              size: 17,
-              color: Colors.grey.shade400,
-            ),
-            const SizedBox(width: 6),
-            const Text(
-              "sterling.dev",
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 18),
-
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 10,
-          ),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A1A1A),
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(
-              color: Colors.white.withOpacity(.08),
-            ),
-          ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.code_rounded,
-                color: Colors.white,
-                size: 16,
-              ),
-              SizedBox(width: 8),
-              Text(
-                "LEAD DEVELOPER • GDSC",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: .6,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ---------- Follow / Message buttons ----------
-class _ActionButtonsRow extends StatelessWidget {
-  const _ActionButtonsRow();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          Expanded(
-            child: SizedBox(
-              height: 52,
-              child: ElevatedButton(
-                onPressed: () {},
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: const Text(
-                  'Follow',
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: SizedBox(
-              height: 52,
-              child: OutlinedButton(
-                onPressed: () {},
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppColors.cardBorder),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: const Text(
-                  'Message',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+        ],
+        if (hasBio) ...[
+          const SizedBox(height: 18),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Text(
+              profile.bio,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14.5,
+                height: 1.6,
               ),
             ),
           ),
         ],
-      ),
+        if (hasWebsite) ...[
+          const SizedBox(height: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.language_rounded, size: 17, color: Colors.grey.shade400),
+              const SizedBox(width: 6),
+              Text(
+                profile.website,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (hasRoleBadge) ...[
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1A1A),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: Colors.white.withOpacity(.08)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.code_rounded, color: Colors.white, size: 16),
+                const SizedBox(width: 8),
+                Text(
+                  profile.roleBadge,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: .6,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        if (hasJoinedClubs) ...[
+          const SizedBox(height: 18),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: profile.joinedClubs
+                  .map((c) => Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.cardBorder),
+                ),
+                child: Text(
+                  c,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ))
+                  .toList(),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -564,6 +756,27 @@ class AcademicInfoTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final profile = context.watch<ProfileProvider>();
+
+    // Only fields that actually have a value make it into the list —
+    // no "—" placeholder rows, no dangling labels.
+    final fields = <MapEntry<String, String>>[
+      if (profile.fullName.isNotEmpty) MapEntry('FULL NAME', profile.fullName),
+      if (profile.rollNumber.isNotEmpty)
+        MapEntry('ROLL NUMBER', profile.rollNumber),
+      if (profile.branch.isNotEmpty) MapEntry('BRANCH', profile.branch),
+      if (profile.yearOfStudy.isNotEmpty)
+        MapEntry('YEAR OF STUDY', profile.yearOfStudy),
+    ];
+
+    if (fields.isEmpty) {
+      return const _EmptyState(
+        icon: Icons.school_outlined,
+        title: 'No academic info yet',
+        subtitle: 'Add your roll number, branch and year to complete\nyour academic profile.',
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10),
       child: Container(
@@ -575,20 +788,11 @@ class AcademicInfoTab extends StatelessWidget {
           border: Border.all(color: AppColors.cardBorder),
         ),
         child: Column(
-          children: const [
-            _InfoRow(label: 'FULL NAME', value: 'Alex Sterling'),
-            _InfoDivider(),
-            _InfoRow(label: 'ROLL NUMBER', value: '2100910100042'),
-            _InfoDivider(),
-            _InfoRow(
-              label: 'BRANCH',
-              value: 'Computer Science & Engineering',
-            ),
-            _InfoDivider(),
-            _InfoRow(
-              label: 'YEAR OF STUDY',
-              value: '3rd Year, Class of 2025',
-            ),
+          children: [
+            for (int i = 0; i < fields.length; i++) ...[
+              _InfoRow(label: fields[i].key, value: fields[i].value),
+              if (i != fields.length - 1) const _InfoDivider(),
+            ],
           ],
         ),
       ),
@@ -653,12 +857,24 @@ class ParticipationTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final profile = context.watch<ProfileProvider>();
+    final data = profile.participationData;
+
+    if (data.isEmpty) {
+      return const _EmptyState(
+        icon: Icons.emoji_events_outlined,
+        title: 'No participations yet',
+        subtitle: 'Events and competitions you join will show up here.',
+      );
+    }
+
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      itemCount: _participationData.length,
+      physics: const BouncingScrollPhysics(),
+      itemCount: data.length,
       separatorBuilder: (_, __) => const SizedBox(height: 14),
       itemBuilder: (context, index) {
-        return _AchievementCard(entry: _participationData[index]);
+        return _AchievementCard(entry: data[index]);
       },
     );
   }
@@ -695,6 +911,8 @@ class _AchievementCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _tierColor;
+    final hasDate = entry.date.trim().isNotEmpty;
+    final hasPosition = entry.position.trim().isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -706,7 +924,6 @@ class _AchievementCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Medal badge
           Container(
             width: 48,
             height: 48,
@@ -718,7 +935,6 @@ class _AchievementCard extends StatelessWidget {
             child: Icon(_tierIcon, color: color, size: 22),
           ),
           const SizedBox(width: 14),
-          // Event name + date
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -731,82 +947,46 @@ class _AchievementCard extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Icon(Icons.calendar_today,
-                        size: 12.5, color: AppColors.textMuted),
-                    const SizedBox(width: 6),
-                    Text(
-                      entry.date,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
+                if (hasDate) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_today,
+                          size: 12.5, color: AppColors.textMuted),
+                      const SizedBox(width: 6),
+                      Text(
+                        entry.date,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          // Position pill
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.14),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              entry.position,
-              style: TextStyle(
-                color: color,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------- Bottom navigation ----------
-class _BottomNavBar extends StatelessWidget {
-  const _BottomNavBar();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.black,
-        border: Border(top: BorderSide(color: AppColors.divider, width: 1)),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            const Icon(Icons.home_outlined, color: Colors.white70, size: 24),
-            const Icon(Icons.search, color: Colors.white70, size: 24),
-            const Icon(Icons.add_circle_outline,
-                color: Colors.white70, size: 24),
-            const Icon(Icons.calendar_today_outlined,
-                color: Colors.white70, size: 22),
+          if (hasPosition) ...[
+            const SizedBox(width: 10),
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
-                color: const Color(0xFF2A2A2A),
-                borderRadius: BorderRadius.circular(10),
+                color: color.withOpacity(0.14),
+                borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(Icons.person_outline,
-                  color: Colors.white, size: 22),
+              child: Text(
+                entry.position,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
           ],
-        ),
+        ],
       ),
     );
   }

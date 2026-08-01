@@ -1,3 +1,4 @@
+
 import 'package:college/Screen/Clubs/discover_clubs_screen.dart';
 import 'package:college/Screen/Profile/Profilescreen.dart';
 import 'package:college/Screen/Profile/studentprofile.dart';
@@ -5,6 +6,7 @@ import 'package:college/Screen/Request/requestscreen.dart';
 import 'package:college/onboarding/HomeScreen.dart';
 import 'package:flutter/material.dart';
 import '../Model/user_role.dart';
+import '../Notices/homescreen/homescreen.dart';
 import '../Screen/Auth/club_registration_screen.dart';
 import '../Screen/Auth/email_verification_screen.dart';
 import '../Screen/Auth/forgot_password_screen.dart';
@@ -15,6 +17,7 @@ import '../Screen/Auth/splash_screen.dart';
 import '../Screen/Auth/student_registration_screen.dart';
 import '../Screen/Auth/welcome_screen.dart';
 import '../Screen/Events/createevent.dart';
+import '../notice/screens/splashscreen_notice.dart';
 import '../onboarding/onboarding_screen.dart';
 
 /// Centralized route names for the authentication module.
@@ -25,6 +28,7 @@ class AppRoutes {
   AppRoutes._();
 
   static const String splash = '/';
+  static const String splashnotice = '/noticesplash';
   static const String onboarding = '/onboarding';
   static const String welcome = '/welcome';
   static const String login = '/login';
@@ -40,11 +44,14 @@ class AppRoutes {
   static const String clubs = '/clubs';
   static const String request = '/request';
   static const String createevent = '/createevent';
+  static const String noticehome = '/noticehome';
 
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
       case splash:
         return _fadeRoute(const SplashScreen(), settings);
+      case splashnotice:
+        return _fadeRoute(const  SplashScreen_notice(heroAssetPath: 'assets/images/Stitch/hey.jpg'), settings);
       case onboarding:
         return _fadeRoute(const OnboardingScreen(), settings);
       case welcome:
@@ -75,6 +82,8 @@ class AppRoutes {
         return _fadeRoute(const Requestscreen(), settings);
       case createevent:
         return _fadeRoute(const CreateEventScreen(), settings);
+      case noticehome:
+        return _fadeRoute(const HomeScreen_notice(), settings);
       default:
         return _fadeRoute(
           Scaffold(

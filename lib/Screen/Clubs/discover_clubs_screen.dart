@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-
-
-import 'package:flutter/material.dart';
-
 import '../../BottomNav/animated_bottom_bar.dart';
 import '../../Provider/club_provider.dart';
+import '../../Model/club.dart';
 import '../../widgets/category_chip.dart';
 import '../../widgets/club_card.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/featured_club_card.dart';
+import '../Profile/Profilescreen.dart';
 
 class AppColors {
   AppColors._();
@@ -29,13 +27,39 @@ class AppColors {
   static const Color chipInactiveBg = Color(0xFF1C1C22);
 
   static const Color badgeBg = Color(0x40FFFFFF);
-
   static const Color joinButton = Colors.white;
 }
 
-
-class DiscoverClubsScreen extends StatelessWidget {
+class DiscoverClubsScreen extends StatefulWidget {
   const DiscoverClubsScreen({super.key});
+
+  @override
+  State<DiscoverClubsScreen> createState() => _DiscoverClubsScreenState();
+}
+
+class _DiscoverClubsScreenState extends State<DiscoverClubsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ClubProvider>().ensureLoaded();
+    });
+  }
+
+  Future<void> _onRefresh() {
+    return context.read<ClubProvider>().fetchOrganisers();
+  }
+
+  void _openClub(Club club) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        // Pass the selected club into your profile / detail screen.
+        // See note below if ClubProfileScreen still uses ProfileProvider only.
+        builder: (_) => ClubProfileScreen(),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,103 +70,153 @@ class DiscoverClubsScreen extends StatelessWidget {
       backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,
-        child: Stack(
-          children: [
-            CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(child: _TopBar()),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 20, 10, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Discover Clubs',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 26,
-                            fontWeight: FontWeight.w800,
-                          ),
+        child: RefreshIndicator(
+          onRefresh: _onRefresh,
+          color: Colors.white,
+          backgroundColor: AppColors.surface,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              const SliverToBoxAdapter(child: _TopBar()),
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(10, 20, 10, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Discover Clubs',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
                         ),
-                        SizedBox(height: 6),
-                        Text(
-                          'Find communities that match your interests.',
-                          style: TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 14.5,
-                          ),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'Find communities that match your interests.',
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 14.5,
                         ),
-                      ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(10, 20, 10, 0),
+                  child: _SearchBar(),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 70,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 14,
                     ),
+                    itemCount: provider.categories.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    itemBuilder: (context, index) {
+                      final category = provider.categories[index];
+                      return CategoryChip(
+                        label: category,
+                        isActive: provider.selectedCategory == category,
+                        onTap: () => provider.selectCategory(category),
+                      );
+                    },
                   ),
                 ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 20, 10, 0),
-                    child: _SearchBar(),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 70,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-                      itemCount: provider.categories.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 10),
-                      itemBuilder: (context, index) {
-                        final category = provider.categories[index];
-                        return CategoryChip(
-                          label: category,
-                          isActive: provider.selectedCategory == category,
-                          onTap: () => provider.selectCategory(category),
-                        );
-                      },
-                    ),
-                  ),
-                ),
+              ),
+              if (provider.featured != null)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
                     child: FeaturedClubCard(
-                      club: provider.featured,
-                      onExplore: () {},
+                      club: provider.featured!,
+                      onExplore: () {
+                        if (provider.clubs.isNotEmpty) {
+                          // open provider.clubs.first
+                        }
+                      },
                     ),
                   ),
                 ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 28, 10, 12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Technical',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 28, 10, 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        provider.selectedCategory == 'All'
+                            ? 'All Clubs'
+                            : provider.selectedCategory,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
                         ),
+                      ),
+                      if (provider.selectedCategory != 'All')
                         TextButton(
-                          onPressed: () {},
+                          onPressed: provider.clearFilters,
                           child: const Text(
-                            'View All',
+                            'Clear',
                             style: TextStyle(
                               color: AppColors.textMuted,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
+                        )
+                      else
+                        const SizedBox.shrink(),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Loading
+              if (provider.isLoading && !provider.hasLoadedOnce)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 48),
+                    child: Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
+                  ),
+                )
+              // Error
+              else if (provider.errorMessage != null && clubs.isEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        Text(
+                          provider.errorMessage!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: AppColors.textMuted),
+                        ),
+                        const SizedBox(height: 12),
+                        TextButton(
+                          onPressed: provider.fetchOrganisers,
+                          child: const Text('Retry'),
                         ),
                       ],
                     ),
                   ),
-                ),
-                if (clubs.isEmpty)
+                )
+              // Empty
+              else if (clubs.isEmpty)
                   SliverToBoxAdapter(
                     child: EmptyState(onExploreAll: provider.clearFilters),
                   )
+                // List
                 else
                   SliverPadding(
                     padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -153,31 +227,30 @@ class DiscoverClubsScreen extends StatelessWidget {
                         final club = clubs[index];
                         return ClubCard(
                           club: club,
-                          onView: () {},
+                          onView: () => _openClub(club),
                           onJoin: () => provider.toggleJoin(club.id),
                         );
                       },
                     ),
                   ),
-                const SliverToBoxAdapter(child: SizedBox(height: 110)),
-              ],
-            ),
 
-          ],
+              const SliverToBoxAdapter(child: SizedBox(height: 110)),
+            ],
+          ),
         ),
       ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: const AnimatedBottomBar(selectedIndex: 2,),
+      floatingActionButton: const Padding(
+        padding: EdgeInsets.all(8.0),
+        child: AnimatedBottomBar(selectedIndex: 2),
       ),
-      floatingActionButtonLocation:
-      FloatingActionButtonLocation.centerDocked,
-
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
 }
 
 class _TopBar extends StatelessWidget {
+  const _TopBar();
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -206,8 +279,11 @@ class _TopBar extends StatelessWidget {
               color: AppColors.surfaceElevated,
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.leaderboard,
-                color: AppColors.textMuted, size: 20),
+            child: const Icon(
+              Icons.leaderboard,
+              color: AppColors.textMuted,
+              size: 20,
+            ),
           ),
         ],
       ),
@@ -216,6 +292,8 @@ class _TopBar extends StatelessWidget {
 }
 
 class _SearchBar extends StatelessWidget {
+  const _SearchBar();
+
   @override
   Widget build(BuildContext context) {
     final provider = context.read<ClubProvider>();
@@ -232,8 +310,11 @@ class _SearchBar extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.search_rounded,
-                    color: AppColors.textFaint, size: 22),
+                const Icon(
+                  Icons.search_rounded,
+                  color: AppColors.textFaint,
+                  size: 22,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: TextField(
@@ -260,57 +341,13 @@ class _SearchBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: AppColors.border),
           ),
-          child: const Icon(Icons.filter_list_rounded,
-              color: AppColors.textMuted, size: 22),
+          child: const Icon(
+            Icons.filter_list_rounded,
+            color: AppColors.textMuted,
+            size: 22,
+          ),
         ),
       ],
-    );
-  }
-}
-
-class _BottomNavBar extends StatelessWidget {
-  const _BottomNavBar();
-
-  @override
-  Widget build(BuildContext context) {
-    const items = [
-      (Icons.home_rounded, 'Home'),
-      (Icons.calendar_today_rounded, 'Events'),
-      (Icons.groups_rounded, 'Clubs'),
-      (Icons.search_rounded, 'Search'),
-      (Icons.person_rounded, 'Profile'),
-    ];
-    const activeIndex = 2;
-
-    return Container(
-      padding: const EdgeInsets.only(top: 10, bottom: 24),
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(items.length, (index) {
-          final (icon, label) = items[index];
-          final isActive = index == activeIndex;
-          final color = isActive ? Colors.white : AppColors.textFaint;
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color, size: 24),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 11.5,
-                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                ),
-              ),
-            ],
-          );
-        }),
-      ),
     );
   }
 }

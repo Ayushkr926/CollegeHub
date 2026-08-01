@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:college/Screen/Auth/provider/club_registration.dart';
 import 'package:college/Screen/Auth/widgets/app_header.dart';
 import 'package:college/Screen/Auth/widgets/custom_checkbox.dart';
 import 'package:college/Screen/Auth/widgets/custom_text_field.dart';
@@ -5,6 +8,10 @@ import 'package:college/Screen/Auth/widgets/loading_button.dart';
 import 'package:college/Screen/Auth/widgets/password_field.dart';
 import 'package:college/Screen/Auth/widgets/section_title.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+
 import '../../utils/app_colors.dart';
 import '../../utils/app_constants.dart';
 import '../../utils/app_routes.dart';
@@ -12,10 +19,6 @@ import '../../utils/app_spacing.dart';
 import '../../utils/app_text_styles.dart';
 import '../../utils/validators.dart';
 
-
-/// Registration form for club organizers. Includes an official club logo
-/// placeholder, faculty coordinator details, and a confirmation checkbox
-/// since club accounts require admin verification before use.
 class ClubRegistrationScreen extends StatefulWidget {
   const ClubRegistrationScreen({super.key});
 
@@ -35,11 +38,6 @@ class _ClubRegistrationScreenState extends State<ClubRegistrationScreen> {
   final _descriptionController = TextEditingController();
   final _phoneController = TextEditingController();
 
-  String? _selectedCategory;
-  bool _isOfficialClub = false;
-  bool _officialClubError = false;
-  bool _isLoading = false;
-
   @override
   void dispose() {
     _clubNameController.dispose();
@@ -50,27 +48,107 @@ class _ClubRegistrationScreenState extends State<ClubRegistrationScreen> {
     _facultyEmailController.dispose();
     _descriptionController.dispose();
     _phoneController.dispose();
+    // Reset provider so next visit starts clean
+    context.read<ClubRegistrationProvider>().reset();
     super.dispose();
   }
 
   Future<void> _handleSubmit() async {
     final isFormValid = _formKey.currentState!.validate();
-    final isConfirmed = _isOfficialClub;
+    if (!isFormValid) return;
 
-    setState(() => _officialClubError = !isConfirmed);
+    final provider = context.read<ClubRegistrationProvider>();
 
-    if (!isFormValid || !isConfirmed) return;
-
-    setState(() => _isLoading = true);
-
-    // TODO: Wire this up to real backend registration (create club record
-    // with status = pending_verification, notify admins for approval, etc).
-    await Future.delayed(const Duration(milliseconds: 900));
+    final ok = await provider.handleCreateClub(
+      context,
+      clubName: _clubNameController.text,
+      email: _emailController.text,
+      password: _passwordController.text,
+      facultyName: _facultyNameController.text,
+      facultyEmail: _facultyEmailController.text,
+      description: _descriptionController.text,
+      phone: _phoneController.text,
+    );
 
     if (!mounted) return;
-    setState(() => _isLoading = false);
 
-    Navigator.of(context).pushNamed(AppRoutes.registrationSuccess);
+    if (!ok) {
+      final error = provider.error;
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Navigator.of(context).pushNamed(AppRoutes.registrationSuccess);
+  }
+
+  Future<void> _showLogoSourceSheet() async {
+    HapticFeedback.lightImpact();
+    final provider = context.read<ClubRegistrationProvider>();
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text('Club Logo', style: TextStyle(fontSize: 18,color: Colors.white)),
+            const SizedBox(height: 20),
+            _SourceTile(
+              icon: Icons.photo_library_rounded,
+              label: 'Choose from Gallery',
+              onTap: () {
+                Navigator.pop(ctx);
+                provider.pickLogo(source: ImageSource.gallery);
+              },
+            ),
+            const SizedBox(height: 10),
+            _SourceTile(
+              icon: Icons.camera_alt_rounded,
+              label: 'Take a Photo',
+              onTap: () {
+                Navigator.pop(ctx);
+                provider.pickLogo(source: ImageSource.camera);
+              },
+            ),
+            if (provider.hasLogo) ...[
+              const SizedBox(height: 10),
+              _SourceTile(
+                icon: Icons.delete_outline_rounded,
+                label: 'Remove Logo',
+                isDestructive: true,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  provider.removeLogo();
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -79,7 +157,9 @@ class _ClubRegistrationScreenState extends State<ClubRegistrationScreen> {
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenHorizontal),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.screenHorizontal,
+          ),
           child: Form(
             key: _formKey,
             child: Column(
@@ -91,14 +171,33 @@ class _ClubRegistrationScreenState extends State<ClubRegistrationScreen> {
                   subtitle: 'Register your club to start hosting events.',
                 ),
                 const SizedBox(height: AppSpacing.lg),
+
+                // ── Logo ───────────────────────────────────────
                 Center(
-                  child: _ClubLogoPlaceholder(
-                    onTap: () {
-                      // TODO: Hook up image picker + upload to storage once
-                      // a backend is integrated.
+                  child: Consumer<ClubRegistrationProvider>(
+                    builder: (context, provider, _) {
+                      return _ClubLogoPicker(
+                        file: provider.logoFile,
+                        onTap: _showLogoSourceSheet,
+                      );
                     },
                   ),
                 ),
+                const SizedBox(height: AppSpacing.sm),
+                Center(
+                  child: TextButton(
+                    onPressed: _showLogoSourceSheet,
+                    child: Text(
+                      'Upload Club Logo',
+                      style: AppTextStyles.bodyMuted.copyWith(
+                        color: Colors.black38,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ── Club Details ───────────────────────────────
                 const SectionTitle(text: 'CLUB DETAILS'),
                 CustomTextField(
                   label: 'Club Name',
@@ -106,7 +205,8 @@ class _ClubRegistrationScreenState extends State<ClubRegistrationScreen> {
                   controller: _clubNameController,
                   prefixIcon: Icons.diversity_3_outlined,
                   textCapitalization: TextCapitalization.words,
-                  validator: (v) => Validators.required(v, fieldName: 'Club name'),
+                  validator: (v) =>
+                      Validators.required(v, fieldName: 'Club name'),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 CustomTextField(
@@ -127,14 +227,24 @@ class _ClubRegistrationScreenState extends State<ClubRegistrationScreen> {
                 PasswordField(
                   label: 'Confirm Password',
                   controller: _confirmPasswordController,
-                  validator: (v) => Validators.confirmPassword(v, _passwordController.text),
+                  validator: (v) => Validators.confirmPassword(
+                    v,
+                    _passwordController.text,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                _CategoryDropdown(
-                  value: _selectedCategory,
-                  onChanged: (value) => setState(() => _selectedCategory = value),
+
+                // Category (driven by provider)
+                Consumer<ClubRegistrationProvider>(
+                  builder: (context, provider, _) {
+                    return _CategoryDropdown(
+                      value: provider.selectedCategory,
+                      onChanged: provider.setCategory,
+                    );
+                  },
                 ),
                 const SizedBox(height: AppSpacing.md),
+
                 CustomTextField(
                   label: 'Description',
                   hint: 'Tell students what your club is about',
@@ -142,7 +252,8 @@ class _ClubRegistrationScreenState extends State<ClubRegistrationScreen> {
                   prefixIcon: Icons.description_outlined,
                   maxLines: 4,
                   textCapitalization: TextCapitalization.sentences,
-                  validator: (v) => Validators.required(v, fieldName: 'Description'),
+                  validator: (v) =>
+                      Validators.required(v, fieldName: 'Description'),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 CustomTextField(
@@ -153,6 +264,8 @@ class _ClubRegistrationScreenState extends State<ClubRegistrationScreen> {
                   keyboardType: TextInputType.phone,
                   validator: Validators.phoneRequired,
                 ),
+
+                // ── Faculty ────────────────────────────────────
                 const SectionTitle(text: 'FACULTY COORDINATOR'),
                 CustomTextField(
                   label: 'Faculty Coordinator Name',
@@ -160,7 +273,10 @@ class _ClubRegistrationScreenState extends State<ClubRegistrationScreen> {
                   controller: _facultyNameController,
                   prefixIcon: Icons.person_outline_rounded,
                   textCapitalization: TextCapitalization.words,
-                  validator: (v) => Validators.required(v, fieldName: 'Faculty coordinator name'),
+                  validator: (v) => Validators.required(
+                    v,
+                    fieldName: 'Faculty coordinator name',
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 CustomTextField(
@@ -172,25 +288,36 @@ class _ClubRegistrationScreenState extends State<ClubRegistrationScreen> {
                   validator: Validators.email,
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                CustomCheckbox(
-                  value: _isOfficialClub,
-                  showError: _officialClubError,
-                  onChanged: (value) => setState(() {
-                    _isOfficialClub = value;
-                    _officialClubError = false;
-                  }),
-                  label: Text(
-                    'I confirm this is an official college club.',
-                    style: AppTextStyles.bodyMuted,
-                  ),
+
+                // ── Confirmation checkbox ──────────────────────
+                Consumer<ClubRegistrationProvider>(
+                  builder: (context, provider, _) {
+                    return CustomCheckbox(
+                      value: provider.isOfficialClub,
+                      showError: provider.officialClubError,
+                      onChanged: provider.setOfficialClub,
+                      label: Text(
+                        'I confirm this is an official college club.',
+                        style: AppTextStyles.bodyMuted,
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: AppSpacing.xl),
-                LoadingButton(
-                  label: 'Submit Club Request',
-                  isLoading: _isLoading,
-                  onPressed: _handleSubmit,
+
+                // ── Submit ─────────────────────────────────────
+                Consumer<ClubRegistrationProvider>(
+                  builder: (context, provider, _) {
+                    return LoadingButton(
+                      label: 'Submit Club Request',
+                      isLoading: provider.isLoading,
+                      onPressed: _handleSubmit,
+                    );
+                  },
                 ),
                 const SizedBox(height: AppSpacing.md),
+
+                // Info banner
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
@@ -201,7 +328,11 @@ class _ClubRegistrationScreenState extends State<ClubRegistrationScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.info_outline_rounded, color: AppColors.textSecondary, size: 20),
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        color: AppColors.textSecondary,
+                        size: 20,
+                      ),
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
                         child: Text(
@@ -222,38 +353,134 @@ class _ClubRegistrationScreenState extends State<ClubRegistrationScreen> {
   }
 }
 
-/// Tappable placeholder for uploading the club's logo.
-class _ClubLogoPlaceholder extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────────
+// LOGO PICKER
+// ─────────────────────────────────────────────────────────────────
+class _ClubLogoPicker extends StatelessWidget {
+  final File? file;
   final VoidCallback onTap;
 
-  const _ClubLogoPlaceholder({required this.onTap});
+  const _ClubLogoPicker({required this.file, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        width: 96,
-        height: 96,
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          shape: BoxShape.circle,
-          border: Border.all(color: AppColors.border, style: BorderStyle.solid),
-        ),
-        child: const Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add_a_photo_outlined, color: AppColors.textSecondary, size: 26),
-            SizedBox(height: 4),
-            Text('Club Logo', style: AppTextStyles.caption),
-          ],
+      child: Stack(
+        alignment: Alignment.bottomRight,
+        children: [
+          Container(
+            width: 104,
+            height: 104,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.card,
+              border: Border.all(color: AppColors.border, width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.25),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipOval(
+              child: file != null
+                  ? Image.file(
+                file!,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+              )
+                  : const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.add_a_photo_outlined,
+                    color: AppColors.textSecondary,
+                    size: 28,
+                  ),
+                  SizedBox(height: 6),
+                  Text('Club Logo', style: AppTextStyles.caption),
+                ],
+              ),
+            ),
+          ),
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: Colors.black38,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.background, width: 2.5),
+            ),
+            child: const Icon(
+              Icons.camera_alt_rounded,
+              size: 15,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SOURCE TILE (bottom sheet)
+// ─────────────────────────────────────────────────────────────────
+class _SourceTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool isDestructive;
+
+  const _SourceTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.isDestructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isDestructive ? Colors.redAccent : AppColors.textPrimary;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 22),
+              const SizedBox(width: 14),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Dropdown for the club's category, styled to match [CustomTextField].
+// ─────────────────────────────────────────────────────────────────
+// CATEGORY DROPDOWN
+// ─────────────────────────────────────────────────────────────────
 class _CategoryDropdown extends StatelessWidget {
   final String? value;
   final ValueChanged<String?> onChanged;
@@ -271,16 +498,23 @@ class _CategoryDropdown extends StatelessWidget {
         ),
         DropdownButtonFormField<String>(
           value: value,
-          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary),
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: AppColors.textSecondary,
+          ),
           dropdownColor: AppColors.cardSecondary,
           style: AppTextStyles.body,
           decoration: const InputDecoration(
             hintText: 'Select a category',
-            prefixIcon: Icon(Icons.category_outlined, color: AppColors.textSecondary, size: 20),
+            prefixIcon: Icon(
+              Icons.category_outlined,
+              color: AppColors.textSecondary,
+              size: 20,
+            ),
           ),
           borderRadius: BorderRadius.circular(AppRadius.medium),
           items: AppConstants.clubCategories
-              .map((category) => DropdownMenuItem(value: category, child: Text(category)))
+              .map((c) => DropdownMenuItem(value: c, child: Text(c)))
               .toList(),
           onChanged: onChanged,
           validator: (v) => v == null ? 'Please select a category' : null,

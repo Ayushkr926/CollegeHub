@@ -1,12 +1,22 @@
 import 'package:college/BottomNav/animated_bottom_bar.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../Provider/profile_provider_student.dart';
 import '../../utils/topnotchclipper.dart';
-
-
-
-class ClubProfileScreen extends StatelessWidget {
+import 'completeprofile.dart';
+import 'edit_club_profile_screen.dart';
+class ClubProfileScreen extends StatefulWidget {
   const ClubProfileScreen({super.key});
+
+  @override
+  State<ClubProfileScreen> createState() => _ClubProfileScreenState();
+}
+
+class _ClubProfileScreenState extends State<ClubProfileScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
 
   static const bg = Color(0xFF0E0E0E);
   static const card = Color(0xFF1A1A1A);
@@ -14,37 +24,61 @@ class ClubProfileScreen extends StatelessWidget {
   static const accentRed = Color(0xFFE94B4B);
 
   @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+
+    // Cache-first load: shows saved-from-login/registration data
+    // instantly if present, then silently syncs with the API.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ProfileProvider>().loadProfile();
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleRefresh() {
+    return context.read<ProfileProvider>().refreshProfile(isoragiser: true);
+  }
+  @override
   Widget build(BuildContext context) {
+    final profile = context.watch<ProfileProvider>();
+
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(child: _buildTopBar(context)),
-            SliverToBoxAdapter(child: _buildProfileHeader()),
-            SliverToBoxAdapter(child: Divider(),),
-            SliverToBoxAdapter(child: _buildStats()),
-            SliverToBoxAdapter(child: Divider(),),
-            SliverToBoxAdapter(child: _buildBio()),
-            SliverToBoxAdapter(child: _buildActionButtons(context)),
-            // SliverToBoxAdapter(child: _buildHighlights()),
-            // SliverToBoxAdapter(child: _buildTabIcons()),
-            // SliverToBoxAdapter(child: _buildImageGrid()),
-            SliverToBoxAdapter(child: _buildUpcomingEvents()),
-            SliverToBoxAdapter(child: _buildClubCore()),
-            const SliverToBoxAdapter(child: SizedBox(height: 124)),
-          ],
+        child: RefreshIndicator(
+          onRefresh: _handleRefresh,
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(child: _buildTopBar(context)),
+              // Fixed: pass ProfileProvider, not Provider
+              SliverToBoxAdapter(child: _buildProfileHeader(profile)),
+              SliverToBoxAdapter(child: CompactProfileCompletion(),),
+              const SliverToBoxAdapter(child: Divider(color: Color(0xFF2A2A2A))),
+              SliverToBoxAdapter(child: _buildStats(profile)),
+              const SliverToBoxAdapter(child: Divider(color: Color(0xFF2A2A2A))),
+              SliverToBoxAdapter(child: _buildBio(profile)),
+              SliverToBoxAdapter(child: _buildActionButtons(context, profile)),
+              SliverToBoxAdapter(child: _buildUpcomingEvents()),
+              SliverToBoxAdapter(child: _buildClubCore()),
+              const SliverToBoxAdapter(child: SizedBox(height: 124)),
+            ],
+          ),
         ),
       ),
-
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: const AnimatedBottomBar(),
+      floatingActionButton: const Padding(
+        padding: EdgeInsets.all(8.0),
+        child: AnimatedBottomBar(),
       ),
-      floatingActionButtonLocation:
-      FloatingActionButtonLocation.centerDocked,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
+
 
   // ---------- Top bar ----------
   Widget _buildTopBar(BuildContext context) {
@@ -58,7 +92,7 @@ class ClubProfileScreen extends StatelessWidget {
           ),
           const Expanded(
             child: Text(
-              'CampusElite',
+              'CampusHub',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 18,
@@ -68,8 +102,15 @@ class ClubProfileScreen extends StatelessWidget {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.ios_share, color: Colors.white, size: 20),
-            onPressed: () {},
+            icon: const Icon(Icons.edit, color: Colors.white),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const EditClubProfileScreen(),
+                ),
+              );
+            },
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: Colors.white),
@@ -81,7 +122,13 @@ class ClubProfileScreen extends StatelessWidget {
   }
 
   // ---------- Avatar / name ----------
-  Widget _buildProfileHeader() {
+  Widget _buildProfileHeader(ProfileProvider profile) {
+    final displayName = profile.clubName.isNotEmpty
+        ? profile.clubName
+        : (profile.fullName.isNotEmpty ? profile.fullName : 'Club');
+    final handle = profile.username.isNotEmpty ? profile.username : '@club';
+    final tagline = profile.bio.isNotEmpty ? profile.bio : 'Innovate • Build • Learn';
+
     return Column(
       children: [
         Container(
@@ -92,42 +139,43 @@ class ClubProfileScreen extends StatelessWidget {
             border: Border.all(color: Colors.white24, width: 2),
           ),
           padding: const EdgeInsets.all(4),
-          child: const CircleAvatar(
-            backgroundColor: Color(0xFF2A2A2A),
-            child: Icon(Icons.school, color: Colors.white70, size: 36),
+          child: CircleAvatar(
+            backgroundColor: const Color(0xFF2A2A2A),
+            backgroundImage: profile.avatarUrl.isNotEmpty
+                ? NetworkImage(profile.avatarUrl)
+                : null,
+            child: profile.avatarUrl.isEmpty
+                ? const Icon(Icons.school, color: Colors.white70, size: 36)
+                : null,
           ),
         ),
         const SizedBox(height: 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Text(
-              'Google Developer Students Club',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ],
+        Text(
+          displayName,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
         const SizedBox(height: 4),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
+          children: [
             Text(
-              '@GDSC_NIET',
-              style: TextStyle(color: subtitle, fontSize: 13),
+              handle,
+              style: const TextStyle(color: subtitle, fontSize: 13),
             ),
-            SizedBox(width: 6),
-            Icon(Icons.verified, color: Color(0xFF4FA8FF), size: 16),
+            const SizedBox(width: 6),
+            const Icon(Icons.verified, color: Color(0xFF4FA8FF), size: 16),
           ],
         ),
         const SizedBox(height: 4),
-        const Text(
-          'Innovate • Build • Learn',
-          style: TextStyle(
+        Text(
+          tagline,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
             color: subtitle,
             fontStyle: FontStyle.italic,
             fontWeight: FontWeight.w600,
@@ -138,10 +186,14 @@ class ClubProfileScreen extends StatelessWidget {
     );
   }
 
-  //join club showfield
+  // ---------- Join-club success sheet ----------
+  void showSuccessSheet(BuildContext context, ProfileProvider profile) {
+    final displayName = profile.clubName.isNotEmpty
+        ? profile.clubName
+        : (profile.fullName.isNotEmpty ? profile.fullName : 'Club');
+    final handle = profile.username.isNotEmpty ? profile.username : '@club';
+    final tagline = profile.bio.isNotEmpty ? profile.bio : 'Innovate • Build • Learn';
 
-
-  void showSuccessSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -151,14 +203,12 @@ class ClubProfileScreen extends StatelessWidget {
           clipBehavior: Clip.none,
           alignment: Alignment.topCenter,
           children: [
-            /// Sheet
             ClipPath(
               clipper: TopNotchClipper(),
-              child:Stack(
+              child: Stack(
                 clipBehavior: Clip.none,
                 alignment: Alignment.topCenter,
                 children: [
-                  /// Sheet
                   TweenAnimationBuilder<double>(
                     tween: Tween(begin: 0.94, end: 1.0),
                     duration: const Duration(milliseconds: 320),
@@ -189,7 +239,6 @@ class ClubProfileScreen extends StatelessWidget {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            /// Avatar + success badge
                             Column(
                               children: [
                                 Stack(
@@ -206,27 +255,34 @@ class ClubProfileScreen extends StatelessWidget {
                                         ),
                                       ),
                                       padding: const EdgeInsets.all(4),
-                                      child: const CircleAvatar(
-                                        backgroundColor: Color(0xFF2A2A2A),
-                                        child: Icon(
+                                      child: CircleAvatar(
+                                        backgroundColor: const Color(0xFF2A2A2A),
+                                        backgroundImage:
+                                        profile.avatarUrl.isNotEmpty
+                                            ? NetworkImage(profile.avatarUrl)
+                                            : null,
+                                        child: profile.avatarUrl.isEmpty
+                                            ? const Icon(
                                           Icons.school,
                                           color: Colors.white70,
                                           size: 36,
-                                        ),
+                                        )
+                                            : null,
                                       ),
                                     ),
-                                    // Animated success badge
                                     Positioned(
                                       right: -2,
                                       bottom: -2,
                                       child: TweenAnimationBuilder<double>(
                                         tween: Tween(begin: 0, end: 1),
-                                        duration: const Duration(milliseconds: 400),
+                                        duration:
+                                        const Duration(milliseconds: 400),
                                         curve: Curves.elasticOut,
-                                        builder: (context, value, child) => Transform.scale(
-                                          scale: value,
-                                          child: child,
-                                        ),
+                                        builder: (context, value, child) =>
+                                            Transform.scale(
+                                              scale: value,
+                                              child: child,
+                                            ),
                                         child: Container(
                                           width: 30,
                                           height: 30,
@@ -249,10 +305,10 @@ class ClubProfileScreen extends StatelessWidget {
                                   ],
                                 ),
                                 const SizedBox(height: 16),
-                                const Text(
-                                  'Google Developer Students Club',
+                                Text(
+                                  displayName,
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 17,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.black,
@@ -261,19 +317,27 @@ class ClubProfileScreen extends StatelessWidget {
                                 const SizedBox(height: 4),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
+                                  children: [
                                     Text(
-                                      '@GDSC_NIET',
-                                      style: TextStyle(color: subtitle, fontSize: 13),
+                                      handle,
+                                      style: const TextStyle(
+                                        color: subtitle,
+                                        fontSize: 13,
+                                      ),
                                     ),
-                                    SizedBox(width: 6),
-                                    Icon(Icons.verified, color: Color(0xFF4FA8FF), size: 16),
+                                    const SizedBox(width: 6),
+                                    const Icon(
+                                      Icons.verified,
+                                      color: Color(0xFF4FA8FF),
+                                      size: 16,
+                                    ),
                                   ],
                                 ),
                                 const SizedBox(height: 4),
-                                const Text(
-                                  'Innovate • Build • Learn',
-                                  style: TextStyle(
+                                Text(
+                                  tagline,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
                                     color: subtitle,
                                     fontStyle: FontStyle.italic,
                                     fontWeight: FontWeight.w600,
@@ -282,9 +346,7 @@ class ClubProfileScreen extends StatelessWidget {
                                 ),
                               ],
                             ),
-
                             const SizedBox(height: 24),
-
                             const Text(
                               'Request Sent!',
                               style: TextStyle(
@@ -293,9 +355,7 @@ class ClubProfileScreen extends StatelessWidget {
                                 color: Colors.black,
                               ),
                             ),
-
                             const SizedBox(height: 10),
-
                             const Text(
                               'Your request to join this club has been sent.\nYou\'ll be notified once it\'s approved.',
                               textAlign: TextAlign.center,
@@ -305,9 +365,7 @@ class ClubProfileScreen extends StatelessWidget {
                                 height: 1.4,
                               ),
                             ),
-
                             const SizedBox(height: 30),
-
                             SizedBox(
                               width: double.infinity,
                               height: 58,
@@ -319,9 +377,7 @@ class ClubProfileScreen extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(30),
                                   ),
                                 ),
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                },
+                                onPressed: () => Navigator.pop(context),
                                 child: const Text(
                                   'Got it',
                                   style: TextStyle(
@@ -337,8 +393,6 @@ class ClubProfileScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-
-                  /// Floating Close Button
                   Positioned(
                     top: -6,
                     child: Material(
@@ -349,10 +403,10 @@ class ClubProfileScreen extends StatelessWidget {
                         child: Ink(
                           width: 52,
                           height: 52,
-                          decoration: BoxDecoration(
+                          decoration: const BoxDecoration(
                             color: Colors.white,
                             shape: BoxShape.circle,
-                            boxShadow: const [
+                            boxShadow: [
                               BoxShadow(
                                 color: Colors.black12,
                                 blurRadius: 12,
@@ -360,48 +414,15 @@ class ClubProfileScreen extends StatelessWidget {
                               ),
                             ],
                           ),
-                          child: const Icon(
-                            Icons.close,
-                            color: Colors.black,
-                          ),
+                          child: const Icon(Icons.close, color: Colors.black),
                         ),
                       ),
                     ),
                   ),
                 ],
-              )
-            ),
-
-            /// Floating Close Button
-            Positioned(
-              top: -6,
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => Navigator.of(context).pop(),
-                  borderRadius: BorderRadius.circular(30),
-                  child: Ink(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 12,
-                          offset: Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.close,
-                      color: Colors.black,
-                    ),
-                  ),
-                ),
               ),
             ),
+            // Duplicate close button removed — one is enough
           ],
         );
       },
@@ -409,8 +430,8 @@ class ClubProfileScreen extends StatelessWidget {
   }
 
   // ---------- Stats row ----------
-  Widget _buildStats() {
-    Widget stat(String value, String label) => Container(
+  Widget _buildStats(ProfileProvider profile) {
+    Widget stat(int value, String label) => Container(
       decoration: BoxDecoration(
         color: card,
         borderRadius: BorderRadius.circular(10),
@@ -420,7 +441,7 @@ class ClubProfileScreen extends StatelessWidget {
         child: Column(
           children: [
             Text(
-              value,
+              "${value}",
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 20,
@@ -442,34 +463,46 @@ class ClubProfileScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          stat('48', 'EVENTS'),
-          stat('1.2K', 'MEMBERS'),
-          stat('8.5K', 'FOLLOWERS'),
+          stat(profile.events, 'EVENTS'),
+          stat(profile.members , 'MEMBERS'),
+          stat(profile.followers , 'FOLLOWERS'),
         ],
       ),
     );
   }
 
   // ---------- Bio ----------
-  Widget _buildBio() {
+  Widget _buildBio(ProfileProvider profile) {
+    final description = profile.clubDescription.isNotEmpty
+        ? profile.clubDescription
+        : (profile.bio.isNotEmpty
+        ? profile.bio
+        : 'Official Technical Club. Organizing Hackathons, Workshops, Coding Contests, and Networking Events.');
+
+    final website = profile.website.isNotEmpty ? profile.website : '—';
+    final email = profile.email.isNotEmpty ? profile.email : '—';
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Official Technical Club of NIET. Organizing Hackathons, '
-                'Workshops, Coding Contests, and Networking Events for '
-                'aspiring developers.',
+          Text(
+            description,
             textAlign: TextAlign.start,
-            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4,fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
+              height: 1.4,
+              fontWeight: FontWeight.w500,
+            ),
           ),
           const SizedBox(height: 10),
-          _iconLine(Icons.location_on_outlined, 'NIET, Greater Noida'),
+          _iconLine(Icons.location_on_outlined, 'NIET'),
           const SizedBox(height: 4),
-          _iconLine(Icons.language, 'gdsc.niet.io'),
+          _iconLine(Icons.language, website),
           const SizedBox(height: 4),
-          _iconLine(Icons.email_outlined, 'gdsc@niet.edu.in'),
+          _iconLine(Icons.email_outlined, email),
         ],
       ),
     );
@@ -481,20 +514,32 @@ class ClubProfileScreen extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: subtitle),
         const SizedBox(width: 6),
-        Text(text, style: const TextStyle(color: subtitle, fontSize: 13,fontWeight: FontWeight.bold)),
+        Flexible(
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: subtitle,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }
 
   // ---------- Buttons ----------
-  Widget _buildActionButtons(BuildContext context) {
+  Widget _buildActionButtons(BuildContext context, ProfileProvider profile) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
       child: Row(
         children: [
           Expanded(
             child: ElevatedButton(
-              onPressed: () {},
+              onPressed: () {
+                // Optional: profile.toggleFollow();
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.black,
@@ -503,8 +548,10 @@ class ClubProfileScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              child: const Text('Follow',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
+              child: Text(
+                profile.isFollowing ? 'Following' : 'Follow',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -525,9 +572,7 @@ class ClubProfileScreen extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: OutlinedButton(
-              onPressed: () {
-                showSuccessSheet(context);
-              },
+              onPressed: () => showSuccessSheet(context, profile),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
                 side: const BorderSide(color: Colors.white24),
@@ -544,111 +589,6 @@ class ClubProfileScreen extends StatelessWidget {
     );
   }
 
-  // ---------- Highlights (story circles) ----------
-  Widget _buildHighlights() {
-    final items = [
-      ('Hackathons', Icons.emoji_events_outlined),
-      ('Workshops', Icons.build_outlined),
-      ('Fest', Icons.celebration_outlined),
-      ('Achievements', Icons.military_tech_outlined),
-    ];
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 22),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: items.map((item) {
-          return Column(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white24, width: 1.5),
-                  color: const Color(0xFF1E1E1E),
-                ),
-                child: Icon(item.$2, color: Colors.white70, size: 24),
-              ),
-              const SizedBox(height: 6),
-              Text(item.$1,
-                  style: const TextStyle(color: subtitle, fontSize: 11)),
-            ],
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  // ---------- Tab icon row ----------
-  Widget _buildTabIcons() {
-    final icons = [
-      Icons.grid_view_rounded,
-      Icons.calendar_today_outlined,
-      Icons.play_circle_outline,
-      Icons.bookmark_border,
-      Icons.emoji_events_outlined,
-    ];
-    return Container(
-      decoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(color: Color(0xFF2A2A2A)),
-          bottom: BorderSide(color: Color(0xFF2A2A2A)),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: icons.asMap().entries.map((e) {
-          final selected = e.key == 0;
-          return Icon(
-            e.value,
-            color: selected ? Colors.white : subtitle,
-            size: 22,
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  // ---------- Image grid ----------
-  Widget _buildImageGrid() {
-    final colors = [
-      const Color(0xFF3A3A3A),
-      const Color(0xFF264653),
-      const Color(0xFF1F1F1F),
-      const Color(0xFF2C2C2C),
-      const Color(0xFF14213D),
-      const Color(0xFF1B1B1B),
-    ];
-    final icons = [
-      Icons.people_outline,
-      Icons.memory,
-      Icons.movie_creation_outlined,
-      Icons.groups_outlined,
-      Icons.laptop_mac,
-      Icons.mic_none,
-    ];
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: 6,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          mainAxisSpacing: 2,
-          crossAxisSpacing: 2,
-        ),
-        itemBuilder: (context, index) {
-          return Container(
-            color: colors[index],
-            child: Icon(icons[index], color: Colors.white38, size: 26),
-          );
-        },
-      ),
-    );
-  }
-
   // ---------- Upcoming events ----------
   Widget _buildUpcomingEvents() {
     return Padding(
@@ -656,9 +596,9 @@ class ClubProfileScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
+            children: [
               Text(
                 'Upcoming Events',
                 style: TextStyle(
@@ -706,11 +646,11 @@ class ClubProfileScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Expanded(
+                const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Flutter Hackathon',
                         style: TextStyle(
                           color: Colors.white,
@@ -718,13 +658,13 @@ class ClubProfileScreen extends StatelessWidget {
                           fontSize: 14,
                         ),
                       ),
-                      const SizedBox(height: 3),
-                      const Text(
+                      SizedBox(height: 3),
+                      Text(
                         '9:00 AM • Auditorium',
                         style: TextStyle(color: subtitle, fontSize: 12),
                       ),
-                      const SizedBox(height: 3),
-                      const Text(
+                      SizedBox(height: 3),
+                      Text(
                         '120 Seats Left',
                         style: TextStyle(
                           color: accentRed,
@@ -740,8 +680,10 @@ class ClubProfileScreen extends StatelessWidget {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black,
-                    padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -763,9 +705,9 @@ class ClubProfileScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
+            children: [
               Text(
                 'Club Core',
                 style: TextStyle(
@@ -788,11 +730,14 @@ class ClubProfileScreen extends StatelessWidget {
                     child: CircleAvatar(
                       radius: 22,
                       backgroundColor: bg,
-                      child: CircleAvatar(
+                      child: const CircleAvatar(
                         radius: 20,
-                        backgroundColor: const Color(0xFF2E2E2E),
-                        child: const Icon(Icons.person,
-                            color: Colors.white54, size: 20),
+                        backgroundColor: Color(0xFF2E2E2E),
+                        child: Icon(
+                          Icons.person,
+                          color: Colors.white54,
+                          size: 20,
+                        ),
                       ),
                     ),
                   ),
