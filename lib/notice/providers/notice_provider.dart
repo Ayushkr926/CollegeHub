@@ -6,10 +6,11 @@ import '../services/notice_api_service.dart';
 
 enum LoadStatus { idle, loading, loadingMore, success, empty, error }
 
-/// Central state holder for the notice feature. Wraps [NoticeRepository]
-/// and exposes ChangeNotifier state for: the paginated list, filters,
-/// trending/recent/featured sections, search suggestions, notice detail,
-/// the create/edit form, and per-notice interaction state (like/bookmark/read).
+/// Legacy state holder for the notice feature.
+///
+/// This remains the low-level state container and repository bridge. The app now
+/// exposes a dedicated MVVM entry point via [NoticeViewModel], while keeping this
+/// provider in place to avoid breaking existing imports.
 ///
 /// Register with:
 ///   ChangeNotifierProvider(create: (_) => NoticeProvider(repository: repo))
@@ -179,35 +180,43 @@ class NoticeProvider extends ChangeNotifier {
   // SEARCH SUGGESTIONS
   // ------------------------------------------------------------------
 
-  List<String> searchSuggestions = [];
+  Map<String, List<String>> searchSuggestions = {};
   bool isFetchingSuggestions = false;
   Timer? _suggestionDebounce;
 
   /// Debounced autocomplete fetch — safe to call on every keystroke.
-  void fetchSuggestionsDebounced(String query, {Duration delay = const Duration(milliseconds: 300)}) {
+  void fetchSuggestionsDebounced(
+      String query, {
+        Duration delay = const Duration(milliseconds: 300),
+      }) {
     _suggestionDebounce?.cancel();
+
     if (query.trim().isEmpty) {
-      searchSuggestions = [];
+      searchSuggestions = {};
       notifyListeners();
       return;
     }
+
     _suggestionDebounce = Timer(delay, () => fetchSuggestions(query));
   }
 
   Future<void> fetchSuggestions(String query) async {
     isFetchingSuggestions = true;
     notifyListeners();
+
     try {
       searchSuggestions = await repository.getSearchSuggestions(query);
-    } catch (_) {
-      searchSuggestions = [];
+    } catch (e) {
+      print("Suggestion Error: $e");
+      searchSuggestions = {};
     }
+
     isFetchingSuggestions = false;
     notifyListeners();
   }
 
   void clearSuggestions() {
-    searchSuggestions = [];
+    searchSuggestions = {};
     notifyListeners();
   }
 

@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import '../models/notice_form_data.dart';
 import '../stitch/stitch_token.dart';
 
-/// Notice card — X / Twitter inspired timeline style.
-/// Public API is unchanged.
 class NoticeCard extends StatefulWidget {
   final NoticeModel notice;
   final VoidCallback onTap;
@@ -41,311 +39,197 @@ class _NoticeCardState extends State<NoticeCard> {
         child: InkWell(
           onTap: widget.onTap,
           onHighlightChanged: (v) => setState(() => _pressed = v),
-          splashColor: StitchColors.furCore.withOpacity(0.05),
-          highlightColor: StitchColors.furCore.withOpacity(0.03),
-          borderRadius: BorderRadius.circular(
-            widget.compact ? StitchRadius.podSm : StitchRadius.pod,
-          ),
+          splashColor: const Color(0xFF8B5CF6).withOpacity(0.06),
+          highlightColor: const Color(0xFF8B5CF6).withOpacity(0.03),
+          borderRadius: BorderRadius.circular(16),
           child: Container(
-            margin: EdgeInsets.symmetric(
-              horizontal: widget.compact ? 0 : 0,
-              vertical: 0,
-            ),
             decoration: BoxDecoration(
-              color: StitchColors.surface,
-              borderRadius: BorderRadius.circular(
-                widget.compact ? StitchRadius.podSm : StitchRadius.pod,
-              ),
+              color: const Color(0xFF111218),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: unread
-                    ? StitchColors.furCore.withOpacity(0.22)
-                    : StitchColors.hairline,
-                width: unread ? 1.1 : 0.8,
+                    ? const Color(0xFF8B5CF6).withOpacity(0.25)
+                    : const Color(0xFF2C2F3A),
+                width: 1,
               ),
-              boxShadow: widget.compact
-                  ? null
-                  : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.035),
-                  blurRadius: 12,
-                  offset: const Offset(0, 3),
-                ),
-              ],
             ),
             child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                widget.compact ? 12 : 14,
-                widget.compact ? 12 : 14,
-                widget.compact ? 12 : 14,
-                widget.compact ? 10 : 12,
-              ),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _Header(notice: notice, compact: widget.compact),
-                  if (!widget.compact) ...[
-                    const SizedBox(height: 10),
-                    _MetaRow(notice: notice),
-                    const SizedBox(height: 10),
-                    _FooterRow(
-                      notice: notice,
-                      onLikeTap: widget.onLikeTap,
-                      onBookmarkTap: widget.onBookmarkTap,
-                    ),
-                  ] else ...[
-                    const SizedBox(height: 8),
-                    _MetaRow(notice: notice),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ===========================================================================
-// Header
-// ===========================================================================
-
-class _Header extends StatelessWidget {
-  final NoticeModel notice;
-  final bool compact;
-  const _Header({required this.notice, required this.compact});
-
-  @override
-  Widget build(BuildContext context) {
-    final imageSize = compact ? 42.0 : 48.0;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (notice.coverImageUrl != null) ...[
-          _CoverThumb(url: notice.coverImageUrl!, size: imageSize),
-          const SizedBox(width: 11),
-        ] else ...[
-          // Fallback avatar when no cover image
-          Container(
-            width: imageSize,
-            height: imageSize,
-            decoration: BoxDecoration(
-              color: StitchColors.surfaceSunken,
-              borderRadius: BorderRadius.circular(StitchRadius.podXs),
-            ),
-            child: Icon(
-              Icons.campaign_rounded,
-              size: imageSize * 0.42,
-              color: StitchColors.textFaint,
-            ),
-          ),
-          const SizedBox(width: 11),
-        ],
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Badges row
-              if (notice.isPinned || notice.isImportant)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
+                  // ── Header ────────────────────────────────
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (notice.isPinned)
-                        const _MiniBadge(
-                          icon: Icons.push_pin_rounded,
-                          label: 'Pinned',
-                          color: StitchColors.warning,
+                      // Avatar / Cover
+                      _Avatar(notice: notice),
+                      const SizedBox(width: 12),
+
+                      // Title + badges + summary
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Badges
+                            if (notice.isPinned || notice.isImportant)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 5),
+                                child: Row(
+                                  children: [
+                                    if (notice.isPinned)
+                                      const _Badge(
+                                        icon: Icons.push_pin_rounded,
+                                        label: 'Pinned',
+                                        color: Color(0xFFFBBF24), // yellow
+                                      ),
+                                    if (notice.isPinned && notice.isImportant)
+                                      const SizedBox(width: 6),
+                                    if (notice.isImportant)
+                                      const _Badge(
+                                        icon: Icons.priority_high_rounded,
+                                        label: 'Important',
+                                        color: Color(0xFFEF4444), // red
+                                      ),
+                                  ],
+                                ),
+                              ),
+
+                            // Title + unread dot
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    notice.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 15.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                      height: 1.25,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                ),
+                                if (unread)
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    margin: const EdgeInsets.only(left: 8, top: 5),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF3B82F6), // blue
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 3),
+
+                            // Summary
+                            Text(
+                              notice.summary,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13.2,
+                                color: Colors.white.withOpacity(0.55),
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
                         ),
-                      if (notice.isPinned && notice.isImportant)
-                        const SizedBox(width: 5),
-                      if (notice.isImportant)
-                        const _MiniBadge(
-                          icon: Icons.priority_high_rounded,
-                          label: 'Important',
-                          color: StitchColors.danger,
-                        ),
+                      ),
                     ],
                   ),
-                ),
 
-              // Title + unread indicator
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      notice.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: compact ? 14.0 : 15.0,
-                        fontWeight: FontWeight.w700,
-                        color: StitchColors.noseInk,
-                        height: 1.28,
-                        letterSpacing: -0.15,
+                  const SizedBox(height: 12),
+
+                  // ── Meta row (category + time) ────────────
+                  Row(
+                    children: [
+                      if (notice.isDraft)
+                        const _Chip(
+                          label: 'Draft',
+                          color: Color(0xFF6B7280),
+                          background: Color(0xFF1F2937),
+                        ),
+                      if (notice.isDraft && notice.primaryCategory.isNotEmpty)
+                        const SizedBox(width: 6),
+                      if (notice.primaryCategory.isNotEmpty)
+                        _Chip(
+                          label: notice.primaryCategory,
+                          color: const Color(0xFFC4B5FD),
+                          background: const Color(0xFF2E1F5E),
+                        ),
+                      const Spacer(),
+                      Text(
+                        _formatDate(notice.createdAt),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white.withOpacity(0.4),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                  if (!notice.isReadByMe)
-                    Container(
-                      width: 7,
-                      height: 7,
-                      margin: const EdgeInsets.only(left: 7, top: 5),
-                      decoration: const BoxDecoration(
-                        color: StitchColors.furCore,
-                        shape: BoxShape.circle,
+
+                  const SizedBox(height: 10),
+
+                  // ── Footer (publisher + actions) ──────────
+                  Row(
+                    children: [
+                      // Publisher
+                      Icon(
+                        Icons.person_outline_rounded,
+                        size: 15,
+                        color: Colors.white.withOpacity(0.45),
                       ),
-                    ),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          notice.publisherName ?? 'System',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white.withOpacity(0.5),
+                          ),
+                        ),
+                      ),
+
+                      // Like
+                      _ActionButton(
+                        icon: notice.isLikedByMe
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        active: notice.isLikedByMe,
+                        activeColor: const Color(0xFFF91880),
+                        onTap: widget.onLikeTap,
+                      ),
+                      const SizedBox(width: 4),
+
+                      // Bookmark
+                      _ActionButton(
+                        icon: notice.isBookmarkedByMe
+                            ? Icons.bookmark_rounded
+                            : Icons.bookmark_border_rounded,
+                        active: notice.isBookmarkedByMe,
+                        activeColor: const Color(0xFF8B5CF6),
+                        onTap: widget.onBookmarkTap,
+                      ),
+                    ],
+                  ),
                 ],
               ),
-
-              const SizedBox(height: 3),
-
-              // Summary
-              Text(
-                notice.summary,
-                maxLines: compact ? 2 : 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: compact ? 12.5 : 13.0,
-                  color: StitchColors.textMuted,
-                  fontWeight: FontWeight.w400,
-                  height: 1.38,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CoverThumb extends StatelessWidget {
-  final String url;
-  final double size;
-  const _CoverThumb({required this.url, required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: Image.network(
-        url,
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
-          return Container(
-            width: size,
-            height: size,
-            color: StitchColors.surfaceSunken,
-            child: const Center(
-              child: SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.8,
-                  color: StitchColors.furCore,
-                ),
-              ),
-            ),
-          );
-        },
-        errorBuilder: (_, __, ___) => Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            color: StitchColors.surfaceSunken,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(
-            Icons.image_not_supported_outlined,
-            color: StitchColors.textFaint,
-            size: size * 0.34,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MiniBadge extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  const _MiniBadge({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.11),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 10, color: color),
-          const SizedBox(width: 3),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: color,
-              letterSpacing: 0.05,
             ),
           ),
-        ],
+        ),
       ),
     );
-  }
-}
-
-// ===========================================================================
-// Meta row
-// ===========================================================================
-
-class _MetaRow extends StatelessWidget {
-  final NoticeModel notice;
-  const _MetaRow({required this.notice});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _StatusChip(notice: notice),
-        if (notice.primaryCategory.isNotEmpty) ...[
-          if (_hasStatus(notice)) const SizedBox(width: 6),
-          _CategoryChip(label: notice.primaryCategory),
-        ],
-        const Spacer(),
-        Text(
-          _formatDate(notice.createdAt),
-          style: const TextStyle(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w500,
-            color: StitchColors.textFaint,
-          ),
-        ),
-      ],
-    );
-  }
-
-  bool _hasStatus(NoticeModel n) {
-    return n.isDraft ||
-        n.isArchived ||
-        n.isExpired ||
-        (n.scheduledAt != null && n.scheduledAt!.isAfter(DateTime.now()));
   }
 
   static String _formatDate(DateTime date) {
@@ -359,215 +243,158 @@ class _MetaRow extends StatelessWidget {
   }
 }
 
-class _CategoryChip extends StatelessWidget {
-  final String label;
-  const _CategoryChip({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-      decoration: BoxDecoration(
-        color: StitchColors.earPink.withOpacity(0.14),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10.5,
-          fontWeight: FontWeight.w600,
-          color: StitchColors.earPinkDeep,
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────
+// Avatar
+// ─────────────────────────────────────────────────────────────
+class _Avatar extends StatelessWidget {
   final NoticeModel notice;
-  const _StatusChip({required this.notice});
+  const _Avatar({required this.notice});
 
   @override
   Widget build(BuildContext context) {
-    String label;
-    Color color;
+    const size = 46.0;
 
-    if (notice.isDraft) {
-      label = 'Draft';
-      color = StitchColors.textMuted;
-    } else if (notice.isArchived) {
-      label = 'Archived';
-      color = const Color(0xFF8A6D4A);
-    } else if (notice.isExpired) {
-      label = 'Expired';
-      color = StitchColors.danger;
-    } else if (notice.scheduledAt != null &&
-        notice.scheduledAt!.isAfter(DateTime.now())) {
-      label = 'Scheduled';
-      color = StitchColors.furCore;
-    } else {
-      return const SizedBox.shrink();
+    if (notice.coverImageUrl != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          notice.coverImageUrl!,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _fallback(size),
+        ),
+      );
     }
 
+    return _fallback(size);
+  }
+
+  Widget _fallback(double size) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+      width: size,
+      height: size,
       decoration: BoxDecoration(
-        color: color.withOpacity(0.11),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.22), width: 0.8),
+        color: const Color(0xFF1E1B2E),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF2C2F3A)),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10.5,
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
+      child: const Icon(
+        Icons.campaign_rounded,
+        size: 22,
+        color: Color(0xFF8B5CF6),
       ),
     );
   }
 }
 
-// ===========================================================================
-// Footer — X-style engagement
-// ===========================================================================
+// ─────────────────────────────────────────────────────────────
+// Badges
+// ─────────────────────────────────────────────────────────────
+class _Badge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
 
-class _FooterRow extends StatelessWidget {
-  final NoticeModel notice;
-  final VoidCallback? onLikeTap;
-  final VoidCallback? onBookmarkTap;
-
-  const _FooterRow({
-    required this.notice,
-    required this.onLikeTap,
-    required this.onBookmarkTap,
+  const _Badge({
+    required this.icon,
+    required this.label,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // Publisher
-        if (notice.publisherName != null) ...[
-          Container(
-            width: 16,
-            height: 16,
-            decoration: const BoxDecoration(
-              color: StitchColors.surfaceSunken,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.person_rounded,
-              size: 11,
-              color: StitchColors.textMuted,
-            ),
-          ),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              notice.publisherName!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: StitchColors.textMuted,
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: color,
             ),
           ),
-        ] else
-          const Spacer(),
-
-        const SizedBox(width: 8),
-
-        // Like
-        _EngagementButton(
-          icon: notice.isLikedByMe
-              ? Icons.favorite_rounded
-              : Icons.favorite_border_rounded,
-          activeColor: const Color(0xFFF91880), // X-style pink
-          inactiveColor: StitchColors.textFaint,
-          active: notice.isLikedByMe,
-          count: notice.likeCount,
-          onTap: onLikeTap,
-        ),
-
-        const SizedBox(width: 2),
-
-        // Bookmark
-        _EngagementButton(
-          icon: notice.isBookmarkedByMe
-              ? Icons.bookmark_rounded
-              : Icons.bookmark_border_rounded,
-          activeColor: StitchColors.furCore,
-          inactiveColor: StitchColors.textFaint,
-          active: notice.isBookmarkedByMe,
-          count: notice.bookmarkCount,
-          onTap: onBookmarkTap,
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-class _EngagementButton extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────
+// Category / Status Chip
+// ─────────────────────────────────────────────────────────────
+class _Chip extends StatelessWidget {
+  final String label;
+  final Color color;
+  final Color background;
+
+  const _Chip({
+    required this.label,
+    required this.color,
+    required this.background,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Like / Bookmark buttons
+// ─────────────────────────────────────────────────────────────
+class _ActionButton extends StatelessWidget {
   final IconData icon;
-  final Color activeColor;
-  final Color inactiveColor;
   final bool active;
-  final int count;
+  final Color activeColor;
   final VoidCallback? onTap;
 
-  const _EngagementButton({
+  const _ActionButton({
     required this.icon,
-    required this.activeColor,
-    required this.inactiveColor,
     required this.active,
-    required this.count,
+    required this.activeColor,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? activeColor : inactiveColor;
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedScale(
-                scale: active ? 1.08 : 1.0,
-                duration: const Duration(milliseconds: 140),
-                curve: Curves.easeOutBack,
-                child: Icon(icon, size: 16.5, color: color),
-              ),
-              if (count > 0) ...[
-                const SizedBox(width: 4),
-                Text(
-                  _formatCount(count),
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                  ),
-                ),
-              ],
-            ],
+          padding: const EdgeInsets.all(6),
+          child: Icon(
+            icon,
+            size: 18,
+            color: active ? activeColor : Colors.white.withOpacity(0.4),
           ),
         ),
       ),
     );
-  }
-
-  static String _formatCount(int n) {
-    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
-    return '$n';
   }
 }

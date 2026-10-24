@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../Provider/profile_provider_student.dart';
+import '../../utils/app_constants.dart';
 
 class AppColors {
   static const bg = Color(0xFF0A0A0A);
@@ -40,10 +41,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _websiteCtrl;
   late final TextEditingController _phoneCtrl;
   late final TextEditingController _rollNumberCtrl;
-  late final TextEditingController _branchCtrl;
   late final TextEditingController _clubCtrl;
   late final TextEditingController _clubRoleCtrl;
 
+  late String _branch;
   late String _course;
   late int _year;
   late String _initialSnapshot;
@@ -53,8 +54,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   File? _pickedImage;              // newly selected local file
 
   static const _bioMaxLength = 160;
-  static const _years = [1, 2, 3, 4, 5];
-  static const _courses = ['B.Tech', 'M.Tech', 'BCA', 'MCA', 'Other'];
+  static const _years = AppConstants.yearNumbers;
+  static const _courses = AppConstants.courses;
+  static const _branches = AppConstants.branches;
 
   @override
   @override
@@ -73,7 +75,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _websiteCtrl = TextEditingController(text: p.website);
     _phoneCtrl = TextEditingController(text: p.phoneNumber);
     _rollNumberCtrl = TextEditingController(text: p.rollNumber);
-    _branchCtrl = TextEditingController(text: p.branch);
+    _branch = AppConstants.normalizeBranch(p.branch);
 
     // ✅ Missing controllers
     _clubCtrl = TextEditingController(
@@ -85,7 +87,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
 
     _avatarUrl = p.avatarUrl;
-    _course = _courses.contains(p.course) ? p.course : 'Other';
+    _course = AppConstants.normalizeCourse(p.course).isEmpty
+      ? 'Other'
+      : AppConstants.normalizeCourse(p.course);
     _year = p.yearNumber > 0 ? p.yearNumber.clamp(1, 5) : 1;
 
     _initialSnapshot = _snapshot();
@@ -98,7 +102,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _websiteCtrl.text,
     _phoneCtrl.text,
     _rollNumberCtrl.text,
-    _branchCtrl.text,
+    _branch,
     _clubCtrl.text,
     _clubRoleCtrl.text,
     _avatarUrl,
@@ -117,7 +121,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _websiteCtrl.dispose();
     _phoneCtrl.dispose();
     _rollNumberCtrl.dispose();
-    _branchCtrl.dispose();
     _clubCtrl.dispose();
     _clubRoleCtrl.dispose();
     super.dispose();
@@ -307,7 +310,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       website: _normalizeUrl(_websiteCtrl.text),
       phoneNumber: _phoneCtrl.text.trim(),
       rollNumber: _rollNumberCtrl.text.trim(),
-      branch: _branchCtrl.text.trim(),
+      branch: AppConstants.normalizeBranch(_branch),
       course: _course,
       yearOfStudy: _year,
 
@@ -490,12 +493,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           ),
                           _FieldWrap(
                             label: 'Branch',
-                            child: TextFormField(
-                              controller: _branchCtrl,
-                              textCapitalization: TextCapitalization.words,
+                            child: DropdownButtonFormField<String>(
+                              value: _branches.contains(_branch) ? _branch : null,
+                              dropdownColor: AppColors.card,
                               style: _fieldStyle,
-                              decoration: _inputDecoration(
-                                  'e.g. Computer Science'),
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(vertical: 6),
+                              ),
+                              icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                                  color: AppColors.textMuted),
+                              items: _branches
+                                  .map((branch) => DropdownMenuItem(
+                                        value: branch,
+                                        child: Text(branch),
+                                      ))
+                                  .toList(),
+                              onChanged: (value) => setState(
+                                () => _branch = value ?? _branch,
+                              ),
                             ),
                           ),
                           _FieldWrap(

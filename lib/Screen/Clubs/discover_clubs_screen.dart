@@ -8,7 +8,7 @@ import '../../widgets/category_chip.dart';
 import '../../widgets/club_card.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/featured_club_card.dart';
-import '../Profile/Profilescreen.dart';
+import 'club_detail_screen.dart';
 
 class AppColors {
   AppColors._();
@@ -47,16 +47,16 @@ class _DiscoverClubsScreenState extends State<DiscoverClubsScreen> {
   }
 
   Future<void> _onRefresh() {
-    return context.read<ClubProvider>().fetchOrganisers();
+    return context.read<ClubProvider>().fetchClubs();
   }
 
-  void _openClub(Club club) {
+  Future<void> _openClub(Club club) async {
+    final detailedClub = await context.read<ClubProvider>().getClubById(club.id);
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
-        // Pass the selected club into your profile / detail screen.
-        // See note below if ClubProfileScreen still uses ProfileProvider only.
-        builder: (_) => ClubProfileScreen(),
+        builder: (_) => ClubDetailScreen(club: detailedClub ?? club),
       ),
     );
   }
@@ -204,7 +204,7 @@ class _DiscoverClubsScreenState extends State<DiscoverClubsScreen> {
                         ),
                         const SizedBox(height: 12),
                         TextButton(
-                          onPressed: provider.fetchOrganisers,
+                          onPressed: provider.fetchClubs,
                           child: const Text('Retry'),
                         ),
                       ],
@@ -228,7 +228,9 @@ class _DiscoverClubsScreenState extends State<DiscoverClubsScreen> {
                         return ClubCard(
                           club: club,
                           onView: () => _openClub(club),
-                          onJoin: () => provider.toggleJoin(club.id),
+                          onJoin: () async {
+                            await provider.joinClub(club.id);
+                          },
                         );
                       },
                     ),

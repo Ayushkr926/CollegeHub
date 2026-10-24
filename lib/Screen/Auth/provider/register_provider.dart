@@ -7,6 +7,7 @@ import '../../../Model/user_role.dart';
 
 import '../../../storage/local_storage.dart';
 import '../../../utils/app_routes.dart';
+import '../../../utils/app_constants.dart';
 
 class RegisterProvider extends ChangeNotifier {
   // Text Editing Controllers
@@ -57,7 +58,17 @@ class RegisterProvider extends ChangeNotifier {
 
   // Setters
   void setSelectedYear(String? year) {
-    _selectedYear = year;
+    _selectedYear = year == null ? null : AppConstants.yearLabel(year);
+    notifyListeners();
+  }
+
+  void setCourse(String? course) {
+    _courseController.text = AppConstants.normalizeCourse(course);
+    notifyListeners();
+  }
+
+  void setBranch(String? branch) {
+    _branchController.text = AppConstants.normalizeBranch(branch);
     notifyListeners();
   }
 
@@ -83,15 +94,6 @@ class RegisterProvider extends ChangeNotifier {
     _branchController.dispose();
     _phoneController.dispose();
     super.dispose();
-  }
-
-  /// Extracts the leading integer from a value like "3rd Year" -> 3.
-  /// Falls back to 0 if nothing numeric is found.
-  int _yearToInt(String? value) {
-    if (value == null) return 0;
-    final match = RegExp(r'\d+').firstMatch(value);
-    if (match == null) return 0;
-    return int.tryParse(match.group(0)!) ?? 0;
   }
 
   Future<void> handleCreateAccount(BuildContext context) async {
@@ -123,9 +125,9 @@ class RegisterProvider extends ChangeNotifier {
         "password": passwordController.text,
         "phoneNumber": phoneController.text.trim(),
         "rollNumber": rollNumberController.text.trim(),
-        "branch": branchController.text.trim(),
-        "course": courseController.text.trim(),
-        "year": _yearToInt(selectedYear),
+        "branch": AppConstants.normalizeBranch(branchController.text),
+        "course": AppConstants.normalizeCourse(courseController.text),
+        "year": AppConstants.normalizeYear(selectedYear) ?? 0,
       };
 
       debugPrint("Sending registration request...");

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/app_constants.dart';
 
 enum NoticeImportance { normal, important }
 
@@ -108,6 +109,11 @@ class Notice {
       expiresAt: payload['expiresAt'] != null
           ? DateTime.tryParse(payload['expiresAt'].toString())
           : null,
+        targetDepartments: AppConstants.normalizeBranches(
+        payload['targetDepartments'] is List
+          ? payload['targetDepartments'] as List
+          : const <dynamic>[],
+        ),
       importance: payload['isImportant'] == true ? NoticeImportance.important : NoticeImportance.normal,
       isPinned: payload['isPinned'] == true,
       isRead: payload['isRead'] == true,
@@ -154,8 +160,9 @@ class Notice {
       isNew: isNew ?? this.isNew,
       attachmentCount: attachmentCount ?? this.attachmentCount,
       viewCount: viewCount ?? this.viewCount,
-      targetDepartments:
-      targetDepartments ?? this.targetDepartments,
+      targetDepartments: AppConstants.normalizeBranches(
+        targetDepartments ?? this.targetDepartments,
+      ),
       attachments: attachments ?? this.attachments,
     );
   }

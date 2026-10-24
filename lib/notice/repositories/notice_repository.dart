@@ -67,7 +67,7 @@ class NoticeRepository {
     return apiService.getFeaturedNotices(limit: limit);
   }
 
-  Future<List<String>> getSearchSuggestions(String query) {
+  Future<Map<String, List<String>>> getSearchSuggestions(String query) {
     return apiService.getSearchSuggestions(query);
   }
 

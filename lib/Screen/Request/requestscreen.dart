@@ -37,44 +37,28 @@ class Requestscreen extends StatefulWidget {
 }
 
 class _RequestscreenState extends State<Requestscreen> {
-  void _handleAccept(Requestprovider provider, Request request) {
-    provider.acceptRequest(request.id);
-    _showUndoSnackbar(
-      message: '${request.name} accepted',
-      onUndo: () => provider.undoAction(request.id),
-    );
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<Requestprovider>().loadRequests();
+    });
   }
 
-  void _handleDecline(Requestprovider provider, Request request) {
-    provider.declineRequest(request.id);
-    _showUndoSnackbar(
-      message: '${request.name} declined',
-      onUndo: () => provider.undoAction(request.id),
+  Future<void> _handleReview(
+    Requestprovider provider,
+    Request request, {
+    required bool approve,
+  }) async {
+    final success = await provider.reviewRequest(request.id, approve: approve);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(success
+            ? '${request.name} ${approve ? 'approved' : 'rejected'}'
+            : 'Could not update request'),
+      ),
     );
-  }
-
-  void _showUndoSnackbar({
-    required String message,
-    required VoidCallback onUndo,
-  }) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: AppColors.surfaceElevated,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 3),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          action: SnackBarAction(
-            label: 'UNDO',
-            textColor: Colors.white,
-            onPressed: onUndo,
-          ),
-        ),
-      );
   }
 
   @override
@@ -100,7 +84,7 @@ class _RequestscreenState extends State<Requestscreen> {
                     vertical: 10,
                   ),
                   child: const Text(
-                    'Manage students requesting to join your club',
+                    'Review requests for your clubs',
                     style: TextStyle(color: AppColors.textFaint, fontSize: 18),
                   ),
                 ),
@@ -128,9 +112,28 @@ class _RequestscreenState extends State<Requestscreen> {
                   ),
                 ),
               ),
-              if (requestlist.isEmpty)
+              if (provider.isLoading && requestlist.isEmpty)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                )
+              else if (requestlist.isEmpty)
                 SliverToBoxAdapter(
-                  child: EmptyState(onExploreAll: provider.clearFilters),
+                  child: provider.error != null
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              children: [
+                                Text(provider.error!, style: const TextStyle(color: AppColors.textMuted)),
+                                TextButton(onPressed: provider.loadRequests, child: const Text('Retry')),
+                              ],
+                            ),
+                          ),
+                        )
+                      : EmptyState(onExploreAll: provider.clearFilters),
                 )
               else
                 SliverList.separated(
@@ -141,8 +144,8 @@ class _RequestscreenState extends State<Requestscreen> {
                     return Requestcard(
                       key: ValueKey(request.id),
                       request: request,
-                      onAccept: () => _handleAccept(provider, request),
-                      onDecline: () => _handleDecline(provider, request),
+                      onAccept: () => _handleReview(provider, request, approve: true),
+                      onDecline: () => _handleReview(provider, request, approve: false),
                     );
                   },
                 ),

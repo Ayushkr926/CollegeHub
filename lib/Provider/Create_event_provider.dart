@@ -1,16 +1,25 @@
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
+import '../Api/app_api_service.dart';
+import '../Api/api_constants.dart';
+import '../Model/club.dart';
 import '../Model/event_enums.dart';
 import '../Model/event_model.dart';
+import '../utils/app_constants.dart';
+import 'events_provider.dart';
 import '../Screen/Events/eventdetail.dart';
 
 
 
 
 class CreateEventProvider extends ChangeNotifier {
+  final AppApiService _apiService = AppApiService();
+  bool _isSubmitting = false;
   // ---------------- Basic details ----------------
   final TextEditingController titleController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
@@ -47,6 +56,8 @@ class CreateEventProvider extends ChangeNotifier {
   // ---------------- Organizer & contact ----------------
   final TextEditingController organizingClubController =
   TextEditingController();
+  final TextEditingController organizingClubRefController = TextEditingController();
+  final TextEditingController coverImageUrlController = TextEditingController();
   final TextEditingController contactNameController = TextEditingController();
   final TextEditingController contactEmailController =
   TextEditingController();
@@ -67,12 +78,10 @@ class CreateEventProvider extends ChangeNotifier {
 
   // ---------------- Eligibility ----------------
   String _eligibility = 'Open to All';
+  String _selectedClubId = '';
   final List<String> eligibilityOptions = [
     'Open to All',
-    '1st Year Only',
-    '2nd Year Only',
-    '3rd Year Only',
-    'Final Year Only',
+    ...AppConstants.years.map((year) => '$year Only'),
     'Specific Department',
   ];
   final TextEditingController eligibilityDepartmentController =
@@ -93,7 +102,12 @@ class CreateEventProvider extends ChangeNotifier {
   EventType? get eventType => _eventType;
   bool get isTeamEvent => _isTeamEvent;
   String get eligibility => _eligibility;
+  List<String> get eligibilityDepartments => AppConstants.normalizeBranches(
+        eligibilityDepartmentController.text.split(','),
+      );
   bool get agreedToTerms => _agreedToTerms;
+  bool get isSubmitting => _isSubmitting;
+  String get selectedClubId => _selectedClubId;
 
   // ================= Setters =================
   set category(String newCategory) {
@@ -123,6 +137,15 @@ class CreateEventProvider extends ChangeNotifier {
 
   set eligibility(String value) {
     _eligibility = value;
+    notifyListeners();
+  }
+
+  void toggleEligibilityDepartment(String department) {
+    final selected = eligibilityDepartments.toSet();
+    if (!selected.add(AppConstants.normalizeBranch(department))) {
+      selected.remove(AppConstants.normalizeBranch(department));
+    }
+    eligibilityDepartmentController.text = selected.join(', ');
     notifyListeners();
   }
 
@@ -435,6 +458,9 @@ class CreateEventProvider extends ChangeNotifier {
     if (organizingClubController.text.trim().isEmpty) {
       return 'Please add the organizing club or department';
     }
+    if (organizingClubRefController.text.trim().isEmpty) {
+      return 'Please add the organizing club reference ID';
+    }
     if (contactNameController.text.trim().isEmpty ||
         contactEmailController.text.trim().isEmpty ||
         contactPhoneController.text.trim().isEmpty) {
@@ -443,6 +469,10 @@ class CreateEventProvider extends ChangeNotifier {
     if (maxParticipantsController.text.trim().isEmpty) {
       return 'Please set a maximum participant count';
     }
+    if (int.tryParse(maxParticipantsController.text.trim()) == null ||
+        int.parse(maxParticipantsController.text.trim()) < 1) {
+      return 'Please enter a valid maximum participant count';
+    }
     if (_eventType == null) {
       return 'Please choose Free or Paid';
     }
@@ -450,61 +480,288 @@ class CreateEventProvider extends ChangeNotifier {
         ticketPriceController.text.trim().isEmpty) {
       return 'Please add a ticket price';
     }
+    if (_eventType == EventType.paid &&
+        double.tryParse(ticketPriceController.text.trim()) == null) {
+      return 'Please enter a valid ticket price';
+    }
     if (_isTeamEvent &&
         (minTeamSizeController.text.trim().isEmpty ||
             maxTeamSizeController.text.trim().isEmpty)) {
       return 'Please add min and max team size';
+    }
+    if (_isTeamEvent &&
+        (int.tryParse(minTeamSizeController.text.trim()) == null ||
+            int.tryParse(maxTeamSizeController.text.trim()) == null)) {
+      return 'Please enter valid team sizes';
+    }
+    if (_eligibility == 'Specific Department' &&
+        eligibilityDepartments.isEmpty) {
+      return 'Please add at least one eligible department';
     }
     if (!_agreedToTerms) {
       return 'Please agree to the terms & guidelines';
     }
     return null;
   }
+  Future<void> createEvent(BuildContext context) async {
+    debugPrint('════════════════════════════════════════════');
+    debugPrint('[CreateEvent] 🚀 createEvent() STARTED');
 
-  void createEvent(BuildContext context) {
-    final error = validate();
-    if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    if (_isSubmitting) {
+      debugPrint('[CreateEvent] ⚠️ Already submitting. Returning...');
       return;
     }
 
-    final event = EventModel(
-      title: titleController.text.trim(),
-      description: descriptionController.text.trim(),
-      category: _category,
-      coverImage: _coverImage,
-      eventDate: _eventDate!,
-      startTime: _startTime!,
-      endTime: _endTime!,
-      registrationDeadline: _registrationDeadline,
-      mode: _eventMode,
-      venue: venueController.text.trim(),
-      meetingLink: meetingLinkController.text.trim(),
-      organizingClub: organizingClubController.text.trim(),
-      contactName: contactNameController.text.trim(),
-      contactEmail: contactEmailController.text.trim(),
-      contactPhone: contactPhoneController.text.trim(),
-      socialLink: socialLinkController.text.trim(),
-      maxParticipants: int.parse(maxParticipantsController.text.trim()),
-      type: _eventType!,
-      ticketPrice: _eventType == EventType.paid
-          ? double.tryParse(ticketPriceController.text.trim())
-          : null,
-      isTeamEvent: _isTeamEvent,
-      minTeamSize:
-      _isTeamEvent ? int.tryParse(minTeamSizeController.text.trim()) : null,
-      maxTeamSize:
-      _isTeamEvent ? int.tryParse(maxTeamSizeController.text.trim()) : null,
-      eligibility: _eligibility,
-      eligibilityDepartment: _eligibility == 'Specific Department'
-          ? eligibilityDepartmentController.text.trim()
-          : null,
-    );
+    debugPrint('[CreateEvent] Step 1: Validating form...');
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => EventDetailScreen(event: event)),
+    final error = validate();
+
+    if (error != null) {
+      debugPrint('[CreateEvent] ❌ Validation failed: $error');
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error)),
+        );
+      }
+
+      return;
+    }
+
+    debugPrint('[CreateEvent] ✅ Validation passed');
+
+    debugPrint('[CreateEvent] Step 2: Reading form values...');
+
+    debugPrint('[CreateEvent] Title: ${titleController.text.trim()}');
+    debugPrint('[CreateEvent] Description: ${descriptionController.text.trim()}');
+    debugPrint('[CreateEvent] Category: $_category');
+    debugPrint('[CreateEvent] Event Date: $_eventDate');
+    debugPrint('[CreateEvent] Start Time: $_startTime');
+    debugPrint('[CreateEvent] End Time: $_endTime');
+    debugPrint('[CreateEvent] Registration Deadline: $_registrationDeadline');
+    debugPrint('[CreateEvent] Event Mode: $_eventMode');
+    debugPrint('[CreateEvent] Venue: ${venueController.text.trim()}');
+    debugPrint('[CreateEvent] Meeting Link: ${meetingLinkController.text.trim()}');
+    debugPrint('[CreateEvent] Organizing Club: ${organizingClubController.text.trim()}');
+    debugPrint('[CreateEvent] Organizing Club Ref: ${organizingClubRefController.text.trim()}');
+    debugPrint('[CreateEvent] Contact Name: ${contactNameController.text.trim()}');
+    debugPrint('[CreateEvent] Contact Email: ${contactEmailController.text.trim()}');
+    debugPrint('[CreateEvent] Contact Phone: ${contactPhoneController.text.trim()}');
+    debugPrint('[CreateEvent] Social Link: ${socialLinkController.text.trim()}');
+    debugPrint('[CreateEvent] Max Participants: ${maxParticipantsController.text.trim()}');
+    debugPrint('[CreateEvent] Event Type: $_eventType');
+    debugPrint('[CreateEvent] Ticket Price: ${ticketPriceController.text.trim()}');
+    debugPrint('[CreateEvent] Is Team Event: $_isTeamEvent');
+    debugPrint('[CreateEvent] Min Team Size: ${minTeamSizeController.text.trim()}');
+    debugPrint('[CreateEvent] Max Team Size: ${maxTeamSizeController.text.trim()}');
+    debugPrint('[CreateEvent] Eligibility: $_eligibility');
+    debugPrint(
+      '[CreateEvent] Eligibility Department: ${eligibilityDepartmentController.text.trim()}',
     );
+    debugPrint('[CreateEvent] Important Notice: ${impcontroller.text.trim()}');
+    debugPrint('[CreateEvent] Cover Image: $_coverImage');
+    debugPrint(
+      '[CreateEvent] Cover Image URL: ${coverImageUrlController.text.trim()}',
+    );
+    debugPrint('[CreateEvent] Agreed To Terms: $_agreedToTerms');
+
+    try {
+      debugPrint('[CreateEvent] Step 3: Creating EventModel...');
+
+      final event = EventModel(
+        title: titleController.text.trim(),
+        description: descriptionController.text.trim(),
+        category: _category,
+        coverImage: _coverImage,
+        eventDate: _eventDate!,
+        startTime: _startTime!,
+        endTime: _endTime!,
+        registrationDeadline: _registrationDeadline,
+        mode: _eventMode,
+        venue: venueController.text.trim(),
+        meetingLink: meetingLinkController.text.trim(),
+        organizingClub: organizingClubController.text.trim(),
+        contactName: contactNameController.text.trim(),
+        contactEmail: contactEmailController.text.trim(),
+        contactPhone: contactPhoneController.text.trim(),
+        socialLink: socialLinkController.text.trim(),
+        maxParticipants: int.parse(
+          maxParticipantsController.text.trim(),
+        ),
+        type: _eventType!,
+        ticketPrice: _eventType == EventType.paid
+            ? double.tryParse(ticketPriceController.text.trim())
+            : null,
+        isTeamEvent: _isTeamEvent,
+        minTeamSize: _isTeamEvent
+            ? int.tryParse(minTeamSizeController.text.trim())
+            : null,
+        maxTeamSize: _isTeamEvent
+            ? int.tryParse(maxTeamSizeController.text.trim())
+            : null,
+        eligibility: _eligibility,
+        eligibilityDepartment: _eligibility == 'Specific Department'
+            ? eligibilityDepartmentController.text.trim()
+            : null,
+        impnotice: impcontroller.text.trim().isEmpty
+            ? null
+            : impcontroller.text.trim(),
+        coverImageUrl: coverImageUrlController.text.trim(),
+      );
+
+      debugPrint('[CreateEvent] ✅ EventModel created successfully');
+
+      debugPrint('[CreateEvent] Step 4: Setting submitting state...');
+
+      _isSubmitting = true;
+      notifyListeners();
+
+      debugPrint('[CreateEvent] _isSubmitting = $_isSubmitting');
+
+      debugPrint('[CreateEvent] Step 5: Creating API request body...');
+
+      final requestBody = {
+        ...event.toApiJson(),
+        'agreedToTerms': _agreedToTerms,
+        'organizingClubRef': organizingClubRefController.text.trim(),
+        if (event.impnotice != null) 'notes': event.impnotice,
+      };
+
+      debugPrint('[CreateEvent] ✅ Request body created');
+      debugPrint('[CreateEvent] API URL: ${ApiConstants.events}');
+      debugPrint('[CreateEvent] HTTP Method: POST');
+      debugPrint('[CreateEvent] Payload: $requestBody');
+
+      debugPrint('[CreateEvent] Step 6: Sending API request...');
+
+      final response = await _apiService.createEvent(requestBody);
+
+      debugPrint('[CreateEvent] ✅ API request completed');
+      debugPrint('[CreateEvent] Raw API response: $response');
+
+      debugPrint('[CreateEvent] Step 7: Extracting event payload...');
+
+      final remoteEvent = _eventPayload(response);
+
+      debugPrint('[CreateEvent] Remote event payload: $remoteEvent');
+
+      debugPrint('[CreateEvent] Step 8: Creating EventModel from API response...');
+
+      final createdEvent = EventModel.fromJson({
+        ...event.toApiJson(),
+        'organizingClubRef': organizingClubRefController.text.trim(),
+        if (event.impnotice != null) 'notes': event.impnotice,
+        ...remoteEvent,
+      });
+
+      debugPrint('[CreateEvent] ✅ Created EventModel from response');
+      debugPrint('[CreateEvent] Created Event: $createdEvent');
+
+      if (!context.mounted) {
+        debugPrint('[CreateEvent] ⚠️ Context is no longer mounted');
+        return;
+      }
+
+      debugPrint('[CreateEvent] Step 9: Refreshing events list...');
+
+      await context.read<EventsProvider>().loadEvents(refresh: true);
+
+      debugPrint('[CreateEvent] ✅ Events list refreshed');
+
+      debugPrint('[CreateEvent] Step 10: Navigating to EventDetailScreen...');
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EventDetailScreen(
+            event: createdEvent,
+          ),
+        ),
+      );
+
+      debugPrint('[CreateEvent] ✅ Navigation completed');
+      debugPrint('[CreateEvent] 🎉 EVENT CREATED SUCCESSFULLY');
+    } on DioException catch (error, stackTrace) {
+      debugPrint('════════════════════════════════════════════');
+      debugPrint('[CreateEvent] ❌ DIO EXCEPTION');
+      debugPrint('[CreateEvent] Error: $error');
+      debugPrint('[CreateEvent] Message: ${error.message}');
+      debugPrint('[CreateEvent] Type: ${error.type}');
+      debugPrint('[CreateEvent] Method: ${error.requestOptions.method}');
+      debugPrint('[CreateEvent] URL: ${error.requestOptions.uri}');
+      debugPrint('[CreateEvent] Request Headers: ${error.requestOptions.headers}');
+      debugPrint('[CreateEvent] Request Data: ${error.requestOptions.data}');
+      debugPrint('[CreateEvent] HTTP Status: ${error.response?.statusCode}');
+      debugPrint('[CreateEvent] Response Headers: ${error.response?.headers}');
+      debugPrint('[CreateEvent] Server Response: ${error.response?.data}');
+      debugPrint('[CreateEvent] StackTrace: $stackTrace');
+      debugPrint('════════════════════════════════════════════');
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not create event: '
+                  '${error.response?.data ?? error.message}',
+            ),
+          ),
+        );
+      }
+    } on FormatException catch (error, stackTrace) {
+      debugPrint('════════════════════════════════════════════');
+      debugPrint('[CreateEvent] ❌ FORMAT EXCEPTION');
+      debugPrint('[CreateEvent] Error: $error');
+      debugPrint('[CreateEvent] StackTrace: $stackTrace');
+      debugPrint('════════════════════════════════════════════');
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invalid event data: $error'),
+          ),
+        );
+      }
+    } on Exception catch (error, stackTrace) {
+      debugPrint('════════════════════════════════════════════');
+      debugPrint('[CreateEvent] ❌ GENERAL EXCEPTION');
+      debugPrint('[CreateEvent] Error: $error');
+      debugPrint('[CreateEvent] StackTrace: $stackTrace');
+      debugPrint('════════════════════════════════════════════');
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not create event: $error'),
+          ),
+        );
+      }
+    } finally {
+      debugPrint('[CreateEvent] Step 11: Resetting submitting state...');
+
+      _isSubmitting = false;
+      notifyListeners();
+
+      debugPrint('[CreateEvent] _isSubmitting = $_isSubmitting');
+      debugPrint('[CreateEvent] 🏁 createEvent() FINISHED');
+      debugPrint('════════════════════════════════════════════');
+    }
+  }
+
+  Map<String, dynamic> _eventPayload(Map<String, dynamic> response) {
+    dynamic payload = response['event'] ?? response['data'] ?? response;
+    if (payload is Map) {
+      final map = Map<String, dynamic>.from(payload);
+      final nested = map['event'];
+      return nested is Map ? Map<String, dynamic>.from(nested) : map;
+    }
+    return const {};
+  }
+
+  void selectOrganizingClub(Club club) {
+    organizingClubController.text = club.name;
+    _selectedClubId = club.id;
+    organizingClubRefController.text = club.ownerUserId;
+    notifyListeners();
   }
 
   @override
@@ -514,6 +771,8 @@ class CreateEventProvider extends ChangeNotifier {
     venueController.dispose();
     meetingLinkController.dispose();
     organizingClubController.dispose();
+    organizingClubRefController.dispose();
+    coverImageUrlController.dispose();
     contactNameController.dispose();
     contactEmailController.dispose();
     contactPhoneController.dispose();

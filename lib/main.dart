@@ -1,5 +1,6 @@
 import 'package:college/Provider/Requestprovider.dart';
 import 'package:college/Provider/club_provider.dart';
+import 'package:college/Provider/events_provider.dart';
 import 'package:college/Screen/Auth/provider/register_provider.dart';
 import 'package:college/Screen/Auth/splash_screen.dart';
 import 'package:college/onboarding/HomeScreen.dart';
@@ -44,6 +45,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => ClubProvider(),
         ),
+        ChangeNotifierProvider(create: (_) => EventsProvider()),
         ChangeNotifierProvider(
           create: (_) => Requestprovider(),
         ),

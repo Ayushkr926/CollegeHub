@@ -2,6 +2,11 @@ import 'package:college/notice/screens/splashscreen_notice.dart';
 import 'package:flutter/material.dart';
 
 import '../BottomNav/animated_bottom_bar.dart';
+import '../Model/event_enums.dart';
+import '../Model/event_model.dart';
+import '../Screen/Events/eventdetail.dart';
+import '../utils/app_routes.dart';
+import '../widgets/home_event_card.dart';
 
 /// ---------------------------------------------------------------------
 /// Monochrome design tokens
@@ -103,7 +108,10 @@ class _HomeScreenState extends State<HomeScreen>
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(10, 28, 10, 0),
               sliver: SliverToBoxAdapter(
-                child: _sectionHeader("Ongoing Events"),
+                child: _sectionHeader(
+                  "Ongoing Events",
+                  onSeeAll: () => Navigator.pushNamed(context, AppRoutes.events),
+                ),
               ),
             ),
             SliverPadding(
@@ -126,7 +134,7 @@ class _HomeScreenState extends State<HomeScreen>
   /// Section title row shared by both event sections. A subtle
   /// arrow replaces the old plain "See all" text for a more
   /// deliberate, tappable feel.
-  Widget _sectionHeader(String title) {
+  Widget _sectionHeader(String title, {VoidCallback? onSeeAll}) {
     return Row(
       children: [
         Text(
@@ -141,7 +149,7 @@ class _HomeScreenState extends State<HomeScreen>
         const Spacer(),
         InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: () {},
+          onTap: onSeeAll ?? () => Navigator.pushNamed(context, AppRoutes.events),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
             child: Row(
@@ -573,169 +581,31 @@ class _HomeScreenState extends State<HomeScreen>
 
   //all events
   Widget upcomingEventCard(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: _Palette.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _Palette.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          /// Title
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  "College Fest 2026",
-                  style: TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
-                    color: _Palette.textPrimary,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: const Text(
-                  "FEST",
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-            ],
-          ),
+    final event = EventModel(
+      title: 'College Fest 2026',
+      description: '',
+      category: 'Fest',
+      eventDate: DateTime(2026, 5, 17),
+      startTime: const TimeOfDay(hour: 10, minute: 0),
+      endTime: const TimeOfDay(hour: 18, minute: 0),
+      mode: EventMode.offline,
+      venue: 'Main Auditorium, NIET Greater Noida',
+      organizingClub: '',
+      contactName: '',
+      contactEmail: '',
+      contactPhone: '',
+      maxParticipants: 0,
+      type: EventType.free,
+      eligibility: 'Open to All',
+      status: 'open',
+      participantsCount: 120,
+    );
 
-          const SizedBox(height: 14),
-
-          Row(
-            children: [
-              const Icon(Icons.calendar_today_rounded,
-                  size: 15, color: _Palette.textSecondary),
-              const SizedBox(width: 8),
-              const Text(
-                "17 May 2026",
-                style: TextStyle(color: _Palette.textSecondary, fontSize: 13),
-              ),
-              const Spacer(),
-              const Icon(Icons.access_time_rounded,
-                  size: 15, color: _Palette.textSecondary),
-              const SizedBox(width: 6),
-              const Text(
-                "10:00 AM",
-                style: TextStyle(color: _Palette.textSecondary, fontSize: 13),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 10),
-
-          const Row(
-            children: [
-              Icon(Icons.location_on_outlined,
-                  size: 16, color: _Palette.textSecondary),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  "Main Auditorium, NIET Greater Noida",
-                  style:
-                  TextStyle(color: _Palette.textSecondary, fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-          Divider(color: _Palette.border, height: 1),
-          const SizedBox(height: 16),
-
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: _Palette.surfaceElevated,
-                  borderRadius: BorderRadius.circular(25),
-                  border: Border.all(color: _Palette.border),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 58,
-                      height: 24,
-                      child: Stack(
-                        children: [
-                          Positioned(
-                              left: 0,
-                              child: _avatar("assets/images/onboarding.jpg")),
-                          Positioned(
-                              left: 14,
-                              child: _avatar("assets/images/onboarding.jpg")),
-                          Positioned(
-                              left: 28,
-                              child: _avatar("assets/images/onboarding.jpg")),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    const Text(
-                      "120 Going",
-                      style: TextStyle(
-                        color: _Palette.textPrimary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 9,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.check_circle_rounded,
-                      color: Colors.black,
-                      size: 16,
-                    ),
-                    SizedBox(width: 6),
-                    Text(
-                      "Registration Open",
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
+    return HomeEventCard(
+      event: event,
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => EventDetailScreen(event: event)),
       ),
     );
   }

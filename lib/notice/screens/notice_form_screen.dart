@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import '../models/notice_form_data.dart';
 import '../providers/notice_provider.dart';
+import '../../utils/app_constants.dart';
 import 'notice_detail_screen.dart';
 
 class NoticeFormScreen extends StatefulWidget {
@@ -36,12 +37,9 @@ class _NoticeFormScreenState extends State<NoticeFormScreen> {
     'Administration', 'Sports', 'Other'
   ];
   static const _campuses = ['Main Campus', 'North Campus', 'South Campus'];
-  static const _departments = [
-    'Computer Science', 'Electronics', 'Mechanical',
-    'Civil', 'Business', 'Other'
-  ];
-  static const _years = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'All Years'];
-  static const _programmes = ['B.Tech', 'M.Tech', 'MBA', 'BBA', 'PhD'];
+  static const _departments = AppConstants.branches;
+  static const _years = AppConstants.years;
+  static const _programmes = AppConstants.courses;
 
   // Dark theme colors
   static const _bg = Color(0xFF0D0D0D);

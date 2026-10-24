@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import '../../../utils/app_constants.dart';
 
 enum PublishType { now, schedule, draft }
 enum VisibilityType { public, collegeWide, campus, targeted }
@@ -194,11 +194,11 @@ class NoticeFormData {
       'primaryCategory': primaryCategory,
       'secondaryTags': secondaryTags,
       'customTags': customTags,
-      'visibility': visibility.backendValue,
-      'targetCampuses': targetCampuses,
-      'targetDepartments': targetDepartments,
-      'targetYears': targetYears,
-      'targetProgrammes': targetProgrammes,
+        'visibility': visibility.backendValue,
+        'targetCampuses': targetCampuses,
+        'targetDepartments': AppConstants.normalizeBranches(targetDepartments),
+        'targetYears': AppConstants.normalizeYears(targetYears),
+        'targetProgrammes': AppConstants.normalizeCourses(targetProgrammes),
       'allowGuestAccess': allowGuestAccess,
       'publishType': publishType.backendValue,
       'scheduledAt': scheduledAt?.toUtc().toIso8601String(),

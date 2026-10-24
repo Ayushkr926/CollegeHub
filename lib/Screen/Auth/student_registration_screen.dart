@@ -97,22 +97,26 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                   validator: (v) => Validators.required(v, fieldName: 'Roll number'),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                CustomTextField(
+                _AcademicDropdown(
                   label: 'Course',
-                  hint: 'e.g. B.Tech',
-                  controller: authProvider.courseController,
-                  prefixIcon: Icons.menu_book_outlined,
-                  textCapitalization: TextCapitalization.words,
-                  validator: (v) => Validators.required(v, fieldName: 'Course'),
+                  hint: 'Select course',
+                  value: authProvider.courseController.text.isEmpty
+                      ? null
+                      : authProvider.courseController.text,
+                  values: AppConstants.courses,
+                  icon: Icons.menu_book_outlined,
+                  onChanged: authProvider.setCourse,
                 ),
                 const SizedBox(height: AppSpacing.md),
-                CustomTextField(
+                _AcademicDropdown(
                   label: 'Branch',
-                  hint: 'e.g. Computer Science',
-                  controller: authProvider.branchController,
-                  prefixIcon: Icons.account_tree_outlined,
-                  textCapitalization: TextCapitalization.words,
-                  validator: (v) => Validators.required(v, fieldName: 'Branch'),
+                  hint: 'Select branch',
+                  value: authProvider.branchController.text.isEmpty
+                      ? null
+                      : authProvider.branchController.text,
+                  values: AppConstants.branches,
+                  icon: Icons.account_tree_outlined,
+                  onChanged: authProvider.setBranch,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 _YearDropdown(
@@ -284,6 +288,57 @@ class _YearDropdown extends StatelessWidget {
               .toList(),
           onChanged: onChanged,
           validator: (v) => v == null ? 'Please select your year' : null,
+        ),
+      ],
+    );
+  }
+}
+
+class _AcademicDropdown extends StatelessWidget {
+  const _AcademicDropdown({
+    required this.label,
+    required this.hint,
+    required this.value,
+    required this.values,
+    required this.icon,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String hint;
+  final String? value;
+  final List<String> values;
+  final IconData icon;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm, left: 4),
+          child: Text(label, style: AppTextStyles.label),
+        ),
+        DropdownButtonFormField<String>(
+          value: value != null && values.contains(value) ? value : null,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded,
+              color: AppColors.textSecondary),
+          dropdownColor: AppColors.cardSecondary,
+          style: AppTextStyles.body,
+          decoration: InputDecoration(
+            border: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(20)),
+            ),
+            hintText: hint,
+            prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 20),
+          ),
+          borderRadius: BorderRadius.circular(AppRadius.large),
+          items: values
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
+          onChanged: onChanged,
+          validator: (item) => item == null ? 'Please select a $label' : null,
         ),
       ],
     );

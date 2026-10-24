@@ -439,10 +439,10 @@ class NoticeApiService {
       }) async {
     final cacheKey = 'list:${filters.toQueryParams()}';
 
-    // if (forceRefresh) {
-    //   final cached = _getFromCache<NoticeListResult>(cacheKey);
-    //   if (cached != null) return cached;
-    // }
+    if (!forceRefresh) {
+      final cached = _getFromCache<NoticeListResult>(cacheKey);
+      if (cached != null) return cached;
+    }
 
     final query = filters.toQueryParams();
     _log('LIST', '========== LIST NOTICES ==========');
@@ -548,48 +548,64 @@ class NoticeApiService {
     }
   }
 
-  Future<List<String>> getSearchSuggestions(String query) async {
+  Future<Map<String, List<String>>> getSearchSuggestions(String query) async {
     final trimmed = query.trim();
+
     if (trimmed.isEmpty) {
-      _log('SUGGEST', 'empty query → []');
-      return [];
+      _log('SUGGEST', 'empty query → {}');
+      return {};
     }
 
-    final cacheKey = 'suggest:$trimmed';
-    final cached = _getFromCache<List<String>>(cacheKey);
-    if (cached != null) return cached;
+    _log('SUGGEST', 'search="$trimmed"');
 
-    _log('SUGGEST', 'q="$trimmed"');
     try {
       final res = await _dio.get(
         '${ApiConstants.baseUrl}$_basePath/search/suggestions',
-        queryParameters: {'q': trimmed},
+        queryParameters: {'search': trimmed},
       );
 
-      final suggestions = <String>[];
+      print("========== SEARCH SUGGESTIONS RESPONSE ==========");
+      print("Status Code: ${res.statusCode}");
+      print("Response Data:");
+      print(res.data);
+      print("===============================================");
+
+      final Map<String, List<String>> suggestions = {
+        'titles': [],
+        'categories': [],
+        'tags': [],
+        'publishers': [],
+      };
+
       if (res.data is Map<String, dynamic>) {
         final response = res.data as Map<String, dynamic>;
+
         if (response['data'] is Map<String, dynamic>) {
           final data = response['data'] as Map<String, dynamic>;
-          void addList(String key) {
+
+          for (final key in suggestions.keys) {
             final value = data[key];
+
+            print("Processing '$key' => $value");
+
             if (value is List) {
-              suggestions.addAll(value.map((e) => e.toString()));
+              suggestions[key] = value.map((e) => e.toString()).toList();
             }
           }
-          addList('titles');
-          addList('categories');
-          addList('tags');
-          addList('publishers');
         }
       }
 
-      final result = suggestions.toSet().toList()..sort();
-      _log('SUGGEST', 'parsed ${result.length} items');
-      _putInCache(cacheKey, result, ttl: const Duration(minutes: 5));
-      return result;
+      print("========== PARSED SUGGESTIONS ==========");
+      suggestions.forEach((key, value) {
+        print("$key (${value.length}): $value");
+      });
+      print("========================================");
+
+      return suggestions;
     } on DioException catch (e) {
+      print("Dio Error: ${e.response?.data}");
       _throwFrom(e);
+      return {};
     }
   }
 

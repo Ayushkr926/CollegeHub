@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../Model/event_enums.dart';
 import '../../Provider/Create_event_provider.dart';
+import '../../Provider/club_provider.dart';
+import '../../Provider/profile_provider_student.dart';
+import '../../utils/app_constants.dart';
 
 
 const _bg = Color(0xFF1A1A1A);
@@ -17,7 +20,11 @@ class CreateEventScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => CreateEventProvider(),
+      create: (context) {
+        context.read<ClubProvider>().ensureLoaded();
+        context.read<ProfileProvider>().loadProfile(isorganiser: true);
+        return CreateEventProvider();
+      },
       child: Scaffold(
         backgroundColor: _bg,
         body: SafeArea(
@@ -272,11 +279,96 @@ class _CreateEventForm extends StatelessWidget {
 
         // ---------------- Organizer & contact ----------------
         const _SectionHeader('Organizer & Contact'),
-        _label('Organizing Club / Department'),
+        _label('Existing Organizing Club'),
+        Builder(
+          builder: (context) {
+            final clubsProvider = context.watch<ClubProvider>();
+            final profile = context.watch<ProfileProvider>();
+            final clubs = clubsProvider.clubs
+              .where((club) => club.ownerUserId == profile.id)
+              .toList();
+            if (clubsProvider.isLoading && clubs.isEmpty) {
+              return const LinearProgressIndicator(color: _pink);
+            }
+            if (clubs.isEmpty) {
+              if (profile.isLoading) {
+                return const LinearProgressIndicator(color: _pink);
+              }
+              if (profile.clubName.trim().isEmpty) {
+                return Text(
+                  clubsProvider.errorMessage ?? 'No Club record exists. Complete your organiser profile before creating one.',
+                  style: const TextStyle(color: _muted),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    clubsProvider.errorMessage ?? 'Your organiser profile is not yet linked to a Club record.',
+                    style: const TextStyle(color: _muted),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: clubsProvider.isCreatingClub
+                        ? null
+                        : () async {
+                            final created = await clubsProvider.createClubRecord(
+                              name: profile.clubName,
+                              description: profile.clubDescription,
+                            );
+                            if (created && clubsProvider.clubs.isNotEmpty) {
+                              provider.selectOrganizingClub(clubsProvider.clubs.first);
+                            } else if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    clubsProvider.errorMessage ?? 'Could not create Club record.',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                    icon: clubsProvider.isCreatingClub
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.add),
+                    label: Text(
+                      clubsProvider.isCreatingClub ? 'Creating club...' : 'Create club record',
+                    ),
+                  ),
+                ],
+              );
+            }
+            return DropdownButtonFormField<String>(
+              value: clubs.any((club) => club.id == provider.selectedClubId)
+                  ? provider.selectedClubId
+                  : null,
+              dropdownColor: _card,
+              style: const TextStyle(color: Colors.white),
+              decoration: _fieldDecoration(hint: 'Select a club'),
+              items: clubs
+                  .map((club) => DropdownMenuItem(
+                        value: club.id,
+                        child: Text(club.name, overflow: TextOverflow.ellipsis),
+                      ))
+                  .toList(),
+              onChanged: (id) {
+                if (id == null) return;
+                final selected = clubs.firstWhere((club) => club.id == id);
+                provider.selectOrganizingClub(selected);
+              },
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        _label('Cover Image URL (optional)'),
         TextField(
-          controller: provider.organizingClubController,
+          controller: provider.coverImageUrlController,
+          keyboardType: TextInputType.url,
           style: const TextStyle(color: Colors.white),
-          decoration: _fieldDecoration(hint: 'e.g. Computer Science Society'),
+          decoration: _fieldDecoration(hint: 'https://example.com/event-cover.jpg'),
         ),
         const SizedBox(height: 16),
 
@@ -431,10 +523,17 @@ class _CreateEventForm extends StatelessWidget {
         if (provider.eligibility == 'Specific Department') ...[
           const SizedBox(height: 16),
           _label('Which Department(s)'),
-          TextField(
-            controller: provider.eligibilityDepartmentController,
-            style: const TextStyle(color: Colors.white),
-            decoration: _fieldDecoration(hint: 'e.g. CSE, IT, ECE'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: AppConstants.branches.map((branch) {
+              final selected = provider.eligibilityDepartments.contains(branch);
+              return FilterChip(
+                label: Text(branch),
+                selected: selected,
+                onSelected: (_) => provider.toggleEligibilityDepartment(branch),
+              );
+            }).toList(),
           ),
         ],
         const SizedBox(height: 24),
@@ -679,7 +778,7 @@ class _CreateEventButton extends StatelessWidget {
         width: double.infinity,
         height: 54,
         child: ElevatedButton(
-          onPressed: () => provider.createEvent(context),
+          onPressed: provider.isSubmitting ? null : () => provider.createEvent(context),
           style: ElevatedButton.styleFrom(
             backgroundColor: _pink,
             foregroundColor: Colors.white,
@@ -688,10 +787,15 @@ class _CreateEventButton extends StatelessWidget {
             ),
             elevation: 0,
           ),
-          child: const Text(
-            'Create Event',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
+          child: provider.isSubmitting
+              ? const SizedBox.square(
+                  dimension: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Text(
+                  'Create Event',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
         ),
       ),
     );

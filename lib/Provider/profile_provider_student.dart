@@ -22,6 +22,7 @@ import 'package:http/http.dart' as http;
 import '../Model/participation_entry.dart';
 import '../Model/user_role.dart'; // or wherever Role lives if it's in a separate file
 import '../storage/local_storage.dart';
+import '../utils/app_constants.dart';
 
 // If Role + Student live in the same file, import that instead:
 // import '../Model/student.dart';
@@ -132,8 +133,7 @@ class ProfileProvider extends ChangeNotifier {
       _clubName.isNotEmpty ? _clubName : Role.fromString(_role).title;
 
   /// Plain numeric year (e.g. 3) for dropdowns / pickers.
-  int get yearNumber =>
-      int.tryParse(_yearOfStudy.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+  int get yearNumber => AppConstants.normalizeYear(_yearOfStudy) ?? 0;
 
   // -----------------------------------------------------------------------
   // LOAD PROFILE — cache first, then silently refresh from the API
@@ -145,15 +145,15 @@ class ProfileProvider extends ChangeNotifier {
     if (cached != null) {
       _applyStudent(cached);
       notifyListeners();
-      unawaited(_syncFromApi(showFullScreenLoading: false,isorganiser: isorganiser));
+      unawaited(_syncFromApi(showFullScreenLoading: false, isorganiser: isorganiser));
       return;
     }
 
-    await _syncFromApi(showFullScreenLoading: true,isorganiser: isorganiser);
+    await _syncFromApi(showFullScreenLoading: true, isorganiser: isorganiser);
   }
 
   Future<void> refreshProfile({bool isoragiser = false}) async {
-    await _syncFromApi(showFullScreenLoading: false, isPullToRefresh: true,isorganiser: isoragiser);
+    await _syncFromApi(showFullScreenLoading: false, isPullToRefresh: true, isorganiser: isoragiser);
   }
 
   // -----------------------------------------------------------------------
@@ -201,8 +201,8 @@ class ProfileProvider extends ChangeNotifier {
         debugPrint("❌ Token is missing");
         throw const _AuthMissingException();
       }
-      final url = isorganiser ? ApiConstants.organiserProfile:ApiConstants.studentProfile;
-      final uri = Uri.parse(url);
+      // Use the shared profile endpoint for both student and organiser responses.
+      final uri = Uri.parse(ApiConstants.authProfile);
 
       debugPrint("URL: $uri");
       debugPrint("Headers:");
@@ -310,10 +310,19 @@ class ProfileProvider extends ChangeNotifier {
       throw const FormatException('Unexpected profile response shape');
     }
 
-    final data = decoded['data'];
+    final candidates = [
+      decoded['data'],
+      decoded['user'],
+      decoded['student'],
+      decoded['organiser'],
+    ];
 
-    if (data is Map<String, dynamic>) {
-      return data;
+    for (final candidate in candidates) {
+      if (candidate is Map<String, dynamic>) {
+        if (candidate.containsKey('_id') || candidate.containsKey('id')) {
+          return candidate;
+        }
+      }
     }
 
     if (decoded.containsKey('_id') || decoded.containsKey('id')) {
@@ -380,8 +389,8 @@ class ProfileProvider extends ChangeNotifier {
       phoneNumber: _phoneNumber,
       rollNumber: _rollNumber,
       username: _username.isEmpty ? null : _username.replaceFirst('@', ''),
-      branch: _branch,
-      course: _course,
+      branch: AppConstants.normalizeBranch(_branch),
+      course: AppConstants.normalizeCourse(_course),
       year: yearNumber,
       profilePicture: _avatarUrl,
       bio: _bio,
@@ -470,8 +479,8 @@ class ProfileProvider extends ChangeNotifier {
     if (website != null) _website = website.trim();
     if (phoneNumber != null) _phoneNumber = phoneNumber.trim();
     if (rollNumber != null) _rollNumber = rollNumber.trim();
-    if (branch != null) _branch = branch.trim();
-    if (course != null) _course = course.trim();
+    if (branch != null) _branch = AppConstants.normalizeBranch(branch);
+    if (course != null) _course = AppConstants.normalizeCourse(course);
 
     if (yearOfStudy != null) {
       _yearOfStudy =
@@ -495,10 +504,10 @@ class ProfileProvider extends ChangeNotifier {
         throw const _AuthMissingException();
       }
 
-      final url = isorganiser?ApiConstants.organiserProfile:ApiConstants.studentProfile;
+      // Shared profile update endpoint works for both student and organiser accounts.
       final request = http.MultipartRequest(
         'PUT',
-        Uri.parse(url),
+        Uri.parse(ApiConstants.authProfile),
       );
 
       request.headers['Authorization'] = 'Bearer $token';

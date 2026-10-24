@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../Api/app_api_service.dart';
 import '../Model/request.dart';
 
 class Requestprovider extends ChangeNotifier {
+  final AppApiService _apiService = AppApiService();
   final List<String> categories = const [
     'All',
     'Pending',
@@ -12,92 +14,14 @@ class Requestprovider extends ChangeNotifier {
 
   String _selectedCategory = 'All';
   String _searchQuery = '';
-
-  final List<Request> _requests = [
-    Request(
-      id: '1',
-      name: 'Ayush Kumar',
-      branch: 'CSE (Data Science)',
-      year: 3,
-      image: 'assets/images/onboarding.jpg',
-      timeago: '5 min ago',
-    ),
-    Request(
-      id: '2',
-      name: 'Priya Sharma',
-      branch: 'Information Technology',
-      year: 2,
-      image: 'assets/images/onboarding.jpg',
-      timeago: '12 min ago',
-    ),
-    Request(
-      id: '3',
-      name: 'Rohit Verma',
-      branch: 'Computer Science',
-      year: 4,
-      image: 'assets/images/onboarding.jpg',
-      timeago: '25 min ago',
-    ),
-    Request(
-      id: '4',
-      name: 'Ananya Gupta',
-      branch: 'Electronics & Communication',
-      year: 1,
-      image: 'assets/images/onboarding.jpg',
-      timeago: '40 min ago',
-    ),
-    Request(
-      id: '5',
-      name: 'Karan Singh',
-      branch: 'Mechanical Engineering',
-      year: 3,
-      image: 'assets/images/onboarding.jpg',
-      timeago: '1h ago',
-    ),
-    Request(
-      id: '6',
-      name: 'Sneha Patel',
-      branch: 'Artificial Intelligence',
-      year: 2,
-      image: 'assets/images/onboarding.jpg',
-      timeago: '2h ago',
-    ),
-    Request(
-      id: '7',
-      name: 'Aditya Mishra',
-      branch: 'Electrical Engineering',
-      year: 4,
-      image: 'assets/images/onboarding.jpg',
-      timeago: '3h ago',
-    ),
-    Request(
-      id: '8',
-      name: 'Neha Agarwal',
-      branch: 'Civil Engineering',
-      year: 1,
-      image: 'assets/images/onboarding.jpg',
-      timeago: 'Yesterday',
-    ),
-    Request(
-      id: '9',
-      name: 'Rahul Yadav',
-      branch: 'CSE (AI & ML)',
-      year: 3,
-      image: 'assets/images/onboarding.jpg',
-      timeago: 'Yesterday',
-    ),
-    Request(
-      id: '10',
-      name: 'Divyansh Saxena',
-      branch: 'Computer Science',
-      year: 2,
-      image: 'assets/images/onboarding.jpg',
-      timeago: '2 days ago',
-    ),
-  ];
+  final List<Request> _requests = [];
+  bool _isLoading = false;
+  String? _error;
 
   String get selectedCategory => _selectedCategory;
   String get searchQuery => _searchQuery;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
 
   int get pendingCount =>
       _requests.where((r) => r.status == RequestStatus.pending).length;
@@ -120,9 +44,39 @@ class Requestprovider extends ChangeNotifier {
     }).toList();
   }
 
+  Future<void> loadRequests() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final payload = await _apiService.listClubJoinRequests(
+        status: switch (_selectedCategory) {
+          'Pending' => 'pending',
+          'Accepted' => 'approved',
+          'Declined' => 'rejected',
+          _ => null,
+        },
+      );
+      final raw = payload['requests'] ?? payload['data'] ?? payload;
+      _requests
+        ..clear()
+        ..addAll(raw is List
+            ? raw.whereType<Map>().map(
+                (item) => Request.fromJson(Map<String, dynamic>.from(item)),
+              )
+            : const <Request>[]);
+    } on Exception catch (error) {
+      _error = error.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   void selectCategory(String category) {
     _selectedCategory = category;
     notifyListeners();
+    loadRequests();
   }
 
   void updateSearch(String query) {
@@ -136,17 +90,16 @@ class Requestprovider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void acceptRequest(String id) => _setStatus(id, RequestStatus.accepted);
-
-  void declineRequest(String id) => _setStatus(id, RequestStatus.declined);
-
-  /// Reverts a request back to pending (used for the Snackbar "Undo" action).
-  void undoAction(String id) => _setStatus(id, RequestStatus.pending);
-
-  void _setStatus(String id, RequestStatus status) {
-    final index = _requests.indexWhere((r) => r.id == id);
-    if (index == -1) return;
-    _requests[index].status = status;
-    notifyListeners();
+  Future<bool> reviewRequest(String id, {required bool approve}) async {
+    final ok = await _apiService.reviewClubJoinRequest(
+      id,
+      status: approve ? 'approved' : 'rejected',
+    );
+    if (ok.isNotEmpty) {
+      _requests.removeWhere((request) => request.id == id);
+      notifyListeners();
+      return true;
+    }
+    return false;
   }
 }

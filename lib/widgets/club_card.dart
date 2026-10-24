@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../Screen/Clubs/discover_clubs_screen.dart';
 import '../Model/club.dart';
 
 // ============ ENHANCED CLUB CARD (COMPACT & BEAUTIFUL) ============
@@ -259,7 +260,10 @@ class _ClubCardState extends State<ClubCard> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: widget.onJoin,
+                    onPressed: widget.club.isJoined ||
+                        widget.club.joinRequestStatus == 'pending'
+                      ? null
+                      : widget.onJoin,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: widget.club.isJoined
                           ? Colors.green.shade600
@@ -276,12 +280,20 @@ class _ClubCardState extends State<ClubCard> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          widget.club.isJoined ? Icons.check : Icons.add_rounded,
+                            widget.club.isJoined
+                              ? Icons.check
+                              : widget.club.joinRequestStatus == 'pending'
+                                ? Icons.hourglass_top
+                                : Icons.add_rounded,
                           size: 16,
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          widget.club.isJoined ? 'Joined' : 'Join Club',
+                            widget.club.isJoined
+                              ? 'Joined'
+                              : widget.club.joinRequestStatus == 'pending'
+                                ? 'Request Sent'
+                                : 'Join Club',
                           style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 13,

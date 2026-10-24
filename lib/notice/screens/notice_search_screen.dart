@@ -193,14 +193,14 @@ class _NoticeSearchScreenState extends State<NoticeSearchScreen> {
 // ─────────────────────────────────────────────────────────────
 // SUGGESTIONS VIEW (categorized chips like the image)
 // ─────────────────────────────────────────────────────────────
-
 class _SuggestionsView extends StatelessWidget {
   final bool isLoading;
-  final List<String> suggestions;
-  final void Function(String) onSelect;
+  final Map<String, List<String>> suggestions;
+  final ValueChanged<String> onSelect;
   final VoidCallback onClear;
 
   const _SuggestionsView({
+    super.key,
     required this.isLoading,
     required this.suggestions,
     required this.onSelect,
@@ -209,35 +209,52 @@ class _SuggestionsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final titles = List<String>.from(suggestions['titles'] ?? const []);
+    final categories = List<String>.from(suggestions['categories'] ?? const []);
+    final tags = List<String>.from(suggestions['tags'] ?? const []);
+    final publishers = List<String>.from(suggestions['publishers'] ?? const []);
+
+    final hasSuggestions =
+        titles.isNotEmpty ||
+            categories.isNotEmpty ||
+            tags.isNotEmpty ||
+            publishers.isNotEmpty;
+
+    if (true) {
+      debugPrint("========== SUGGESTIONS ==========");
+      debugPrint("Titles: $titles");
+      debugPrint("Categories: $categories");
+      debugPrint("Tags: $tags");
+      debugPrint("Publishers: $publishers");
+      debugPrint("=================================");
+    }
+
     if (isLoading) {
-      return const Padding(
-        padding: EdgeInsets.all(24),
-        child: Center(
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
           child: SizedBox(
             width: 24,
             height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
+            child: CircularProgressIndicator(
+              strokeWidth: 2.4,
+              color: Colors.white,
+            ),
           ),
         ),
       );
     }
 
-    // For demo / when API returns flat list we still group them visually.
-    // In real use you can split titles / categories / tags / publishers
-    // from the provider if your backend returns them separately.
-    final titles = suggestions.where((s) => s.length > 12).take(4).toList();
-    final categories = suggestions.where((s) => s.length <= 12).take(4).toList();
-    final tags = suggestions.take(6).toList();
-    final publishers = suggestions.skip(2).take(3).toList();
-
-    if (suggestions.isEmpty) {
+    if (!hasSuggestions) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(32),
           child: Text(
-            'Start typing to see suggestions',
-            style: TextStyle(color: Colors.white38, fontSize: 14.5),
-            textAlign: TextAlign.center,
+            "Start typing to see suggestions",
+            style: TextStyle(
+              color: Colors.white38,
+              fontSize: 14.5,
+            ),
           ),
         ),
       );
@@ -246,11 +263,10 @@ class _SuggestionsView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
       children: [
-        // Header
         Row(
           children: [
             const Text(
-              'Suggestions',
+              "Suggestions",
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 16,
@@ -258,67 +274,41 @@ class _SuggestionsView extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            GestureDetector(
-              onTap: onClear,
-              child: const Text(
-                'Clear',
-                style: TextStyle(
-                  color: Colors.white60,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+            TextButton(
+              onPressed: onClear,
+              child: const Text("Clear"),
             ),
           ],
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
 
-        // Titles
-        if (titles.isNotEmpty) ...[
-          _SuggestionGroup(
-            icon: Icons.description_outlined,
-            label: 'Titles',
-            color: Colors.white70,
-            chips: titles,
-            onSelect: onSelect,
-          ),
-          const SizedBox(height: 16),
-        ],
+        _SuggestionGroup(
+          icon: Icons.description_outlined,
+          label: "Titles",
+          chips: titles,
+          onSelect: onSelect,
+        ),
 
-        // Categories
-        if (categories.isNotEmpty) ...[
-          _SuggestionGroup(
-            icon: Icons.grid_view_rounded,
-            label: 'Categories',
-            color: Colors.white70,
-            chips: categories,
-            onSelect: onSelect,
-          ),
-          const SizedBox(height: 16),
-        ],
+        _SuggestionGroup(
+          icon: Icons.grid_view_rounded,
+          label: "Categories",
+          chips: categories,
+          onSelect: onSelect,
+        ),
 
-        // Tags
-        if (tags.isNotEmpty) ...[
-          _SuggestionGroup(
-            icon: Icons.sell_outlined,
-            label: 'Tags',
-            color: Colors.white70,
-            chips: tags,
-            onSelect: onSelect,
-          ),
-          const SizedBox(height: 16),
-        ],
+        _SuggestionGroup(
+          icon: Icons.sell_outlined,
+          label: "Tags",
+          chips: tags,
+          onSelect: onSelect,
+        ),
 
-        // Publishers
-        if (publishers.isNotEmpty) ...[
-          _SuggestionGroup(
-            icon: Icons.person_outline_rounded,
-            label: 'Publishers',
-            color: Colors.white70,
-            chips: publishers,
-            onSelect: onSelect,
-          ),
-        ],
+        _SuggestionGroup(
+          icon: Icons.person_outline_rounded,
+          label: "Publishers",
+          chips: publishers,
+          onSelect: onSelect,
+        ),
       ],
     );
   }
@@ -327,64 +317,57 @@ class _SuggestionsView extends StatelessWidget {
 class _SuggestionGroup extends StatelessWidget {
   final IconData icon;
   final String label;
-  final Color color;
   final List<String> chips;
-  final void Function(String) onSelect;
+  final ValueChanged<String> onSelect;
 
   const _SuggestionGroup({
     required this.icon,
     required this.label,
-    required this.color,
     required this.chips,
     required this.onSelect,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: chips.map((c) {
-            return GestureDetector(
-              onTap: () => onSelect(c),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A1A1A),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white12),
-                ),
-                child: Text(
-                  c,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
+    if (chips.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: Colors.white70),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-            );
-          }).toList(),
-        ),
-      ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: chips.map((chip) {
+              return ActionChip(
+                label: Text(chip),
+                onPressed: () => onSelect(chip),
+                backgroundColor: const Color(0xFF1A1A1A),
+                labelStyle: const TextStyle(
+                  color: Colors.white,
+                ),
+                side: const BorderSide(color: Colors.white12),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
     );
   }
 }

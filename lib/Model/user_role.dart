@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../utils/app_constants.dart';
 
 /// User role within the platform.
 enum Role {
@@ -83,10 +84,13 @@ enum Course {
   mtech,
   bca,
   mca,
+  mba,
+  bba,
+  phd,
   other;
 
   static Course fromString(String? value) {
-    switch (value) {
+    switch (AppConstants.normalizeCourse(value)) {
       case 'B.Tech':
         return Course.btech;
       case 'M.Tech':
@@ -95,6 +99,12 @@ enum Course {
         return Course.bca;
       case 'MCA':
         return Course.mca;
+      case 'MBA':
+        return Course.mba;
+      case 'BBA':
+        return Course.bba;
+      case 'PhD':
+        return Course.phd;
       default:
         return Course.other;
     }
@@ -110,6 +120,12 @@ enum Course {
         return 'BCA';
       case Course.mca:
         return 'MCA';
+      case Course.mba:
+        return 'MBA';
+      case Course.bba:
+        return 'BBA';
+      case Course.phd:
+        return 'PhD';
       case Course.other:
         return 'Other';
     }
@@ -262,9 +278,9 @@ class Student {
       phoneNumber: _Parse.string(actualMap['phoneNumber'] ?? actualMap['phone']),
       rollNumber: _Parse.string(actualMap['rollNumber']),
       username: actualMap['username'] as String?,
-      branch: _Parse.string(actualMap['branch']),
-      course: _Parse.string(actualMap['course']),
-      year: _Parse.integer(actualMap['year']),
+      branch: AppConstants.normalizeBranch(_Parse.string(actualMap['branch'])),
+      course: AppConstants.normalizeCourse(_Parse.string(actualMap['course'])),
+      year: AppConstants.normalizeYear(actualMap['year']) ?? 0,
       profilePicture: _Parse.string(actualMap['profilePicture'] ?? actualMap['logoPath']),
       bio: _Parse.string(actualMap['bio']),
       website: actualMap['website'] as String?,
@@ -293,8 +309,8 @@ class Student {
       'phoneNumber': phoneNumber,
       'rollNumber': rollNumber,
       'username': username,
-      'branch': branch,
-      'course': course,
+      'branch': AppConstants.normalizeBranch(branch),
+      'course': AppConstants.normalizeCourse(course),
       'year': year,
       'profilePicture': profilePicture,
       'bio': bio,

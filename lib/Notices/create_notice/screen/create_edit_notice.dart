@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../model/notice_create_model.dart';
 import '../provider/notice_form_provider.dart';
+import '../../../utils/app_constants.dart';
 
 // ==========================================
 // 🎨 APP DESIGN SYSTEM & COLOR PALETTE
@@ -60,8 +61,9 @@ class _CreateEditNoticeView extends StatefulWidget {
 class _CreateEditNoticeViewState extends State<_CreateEditNoticeView> {
   final _formKey = GlobalKey<FormState>();
 
-  final List<String> _departments = ['CSE', 'ECE', 'ME', 'CE', 'MBA'];
-  final List<String> _years = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
+  final List<String> _departments = AppConstants.branches;
+  final List<String> _years = AppConstants.years;
+  final List<String> _programmes = AppConstants.courses;
   final List<String> _roles = ['Students', 'Faculty', 'Staff'];
 
   // Local Form Controllers
@@ -383,7 +385,30 @@ class _CreateEditNoticeViewState extends State<_CreateEditNoticeView> {
                         }).toList(),
                       ),
                       const SizedBox(height: 12),
-                      _buildLabel('Batches / Academic Years'),
+                      _buildLabel('Courses / Programmes'),
+                      Wrap(
+                        spacing: 8,
+                        children: _programmes.map((programme) {
+                          final isSelected = form.targetProgrammes.contains(programme);
+                          return FilterChip(
+                            label: Text(programme),
+                            selected: isSelected,
+                            selectedColor: AppColors.primarySoft,
+                            checkmarkColor: AppColors.primary,
+                            onSelected: (selected) {
+                              final next = [...form.targetProgrammes];
+                              if (selected) {
+                                next.add(programme);
+                              } else {
+                                next.remove(programme);
+                              }
+                              provider.updateAudienceLists(programmes: next);
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildLabel('Academic Years'),
                       Wrap(
                         spacing: 8,
                         children: _years.map((year) {

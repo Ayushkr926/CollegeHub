@@ -1,12 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
+import '../Api/app_api_service.dart';
 import '../Model/club.dart';
 
 class ClubProvider extends ChangeNotifier {
+  final AppApiService _apiService = AppApiService();
+
   ClubProvider();
 
   final List<String> categories = const [
@@ -24,8 +24,12 @@ class ClubProvider extends ChangeNotifier {
   String _searchQuery = '';
   bool _isLoading = false;
   bool _hasLoadedOnce = false;
+  bool _isCreatingClub = false;
+  bool _isLoadingRequests = false;
   String? _errorMessage;
   Timer? _debounceTimer;
+  Club? _selectedClub;
+  List<Map<String, dynamic>> _joinRequests = [];
 
   List<Club> _clubs = [];
 
@@ -33,7 +37,12 @@ class ClubProvider extends ChangeNotifier {
   String get searchQuery => _searchQuery;
   bool get isLoading => _isLoading;
   bool get hasLoadedOnce => _hasLoadedOnce;
+  bool get isCreatingClub => _isCreatingClub;
+  bool get isLoadingRequests => _isLoadingRequests;
   String? get errorMessage => _errorMessage;
+  Club? get selectedClub => _selectedClub;
+  List<Map<String, dynamic>> get joinRequests =>
+      List.unmodifiable(_joinRequests);
   List<Club> get clubs => List.unmodifiable(_clubs);
   List<Club> get filteredClubs => clubs;
 
@@ -61,98 +70,203 @@ class ClubProvider extends ChangeNotifier {
 
   Future<void> ensureLoaded() async {
     if (_hasLoadedOnce && _clubs.isNotEmpty) return;
-    await fetchOrganisers();
+    await fetchClubs();
   }
 
-  Future<void> fetchOrganisers() async {
+  Future<void> fetchClubs() async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
-    debugPrint('\n========== FETCH ORGANISERS START ==========');
-
     try {
-      // Fixed double slash
-      final uri = Uri.parse(
-        'http://192.168.1.7:5000/api/v1/auth/organisers',
-      ).replace(
-        queryParameters: {
-          if (_searchQuery.trim().isNotEmpty) 'search': _searchQuery.trim(),
-          if (_selectedCategory != 'All') 'category': _selectedCategory,
-        },
-      );
-
-      debugPrint('URL: $uri');
-      debugPrint('Search Query: $_searchQuery');
-      debugPrint('Selected Category: $_selectedCategory');
-
-      final response = await http
-          .get(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-      )
-          .timeout(const Duration(seconds: 15));
-
-      debugPrint('Status Code : ${response.statusCode}');
-      debugPrint('Response Body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body) as Map<String, dynamic>;
-
-        if (body['success'] == true && body['data'] != null) {
-          final list = body['data']['organisers'] as List? ?? [];
-
-          _clubs = list
-              .map(
-                (e) => Club.fromOrganiserJson(
-              Map<String, dynamic>.from(e as Map),
-            ),
-          )
-              .toList();
-
-          // Sort by events → members (desc). Index 0 becomes featured.
-          _sortClubs();
-
-          for (int i = 0; i < _clubs.length; i++) {
-            final c = _clubs[i];
-            debugPrint(
-              '[$i] ${c.name} | events=${c.events} | members=${c.members} | ${c.category}',
-            );
-          }
-
-          _errorMessage = null;
-          debugPrint('✅ Clubs parsed & sorted (${_clubs.length})');
-        } else {
-          _errorMessage =
-              body['message']?.toString() ?? 'Failed to load clubs';
-          debugPrint('❌ API success=false: $_errorMessage');
-        }
-      } else {
-        _errorMessage = 'Server error (${response.statusCode})';
-        debugPrint('❌ Server error ${response.statusCode}');
-      }
-    } on TimeoutException catch (e) {
-      _errorMessage = 'Request timed out. Pull to retry.';
-      debugPrint('⏰ Timeout: $e');
-    } catch (e, st) {
-      _errorMessage = 'Network error: $e';
-      debugPrint('❌ Exception: $e\n$st');
+      final response = await _apiService.listClubs();
+      final list = _extractClubList(response);
+      _clubs = list.map(Club.fromClubJson).toList();
+      _sortClubs();
+      _errorMessage = null;
+    } on Exception catch (e) {
+      _errorMessage = 'Unable to load clubs: $e';
     } finally {
       _isLoading = false;
       _hasLoadedOnce = true;
-      debugPrint(
-        'FINAL → loading=$_isLoading clubs=${_clubs.length} error=$_errorMessage',
-      );
-      debugPrint('========== FETCH ORGANISERS END ==========\n');
       notifyListeners();
     }
+  }
+
+  Future<bool> createClubRecord({
+    required String name,
+    required String description,
+  }) async {
+    if (_isCreatingClub) return false;
+    _isCreatingClub = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _apiService.createClub(
+        name: name.trim(),
+        description: description.trim(),
+      );
+      final rawClub = response['club'] ?? response['data'] ?? response;
+      if (rawClub is Map) {
+        final club = Club.fromClubJson(Map<String, dynamic>.from(rawClub));
+        if (club.id.isNotEmpty) {
+          _clubs.removeWhere((existing) => existing.id == club.id);
+          _clubs.insert(0, club);
+        }
+      }
+
+      if (_clubs.isEmpty) {
+        final refreshed = await _apiService.listClubs();
+        _clubs = _extractClubList(refreshed).map(Club.fromClubJson).toList();
+      }
+
+      if (_clubs.isEmpty) {
+        _errorMessage = 'Club was created, but no Club record was returned.';
+        return false;
+      }
+      _hasLoadedOnce = true;
+      return true;
+    } on Exception catch (error) {
+      _errorMessage = 'Unable to create club record: $error';
+      return false;
+    } finally {
+      _isCreatingClub = false;
+      notifyListeners();
+    }
+  }
+
+  Future<Club?> getClubById(String id) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final response = await _apiService.getClub(id);
+      final map = _extractClubMap(response);
+      final club = Club.fromClubJson(map);
+      _selectedClub = club;
+
+      final index = _clubs.indexWhere((element) => element.id == club.id);
+      if (index != -1) {
+        _clubs[index] = club;
+      } else {
+        _clubs.add(club);
+      }
+
+      _errorMessage = null;
+      return club;
+    } on Exception catch (e) {
+      _errorMessage = 'Unable to load club details: $e';
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> joinClub(String clubId) async {
+    try {
+      final response = await _apiService.joinClub(clubId);
+      final success = response.isNotEmpty;
+
+      if (success) {
+        final index = _clubs.indexWhere((element) => element.id == clubId);
+        if (index != -1) {
+          final current = _clubs[index];
+          current.joinRequestStatus = 'pending';
+        }
+      }
+      notifyListeners();
+      return success;
+    } on Exception catch (e) {
+      _errorMessage = 'Unable to join club: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> loadJoinRequests({String? status}) async {
+    _isLoadingRequests = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await _apiService.listClubJoinRequests(status: status);
+      final raw = response['requests'] ?? response['data'] ?? response;
+      _joinRequests = raw is List
+          ? raw.whereType<Map>().map(Map<String, dynamic>.from).toList()
+          : const [];
+    } on Exception catch (error) {
+      _errorMessage = 'Unable to load join requests: $error';
+    } finally {
+      _isLoadingRequests = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> reviewJoinRequest(
+    String requestId, {
+    required bool approve,
+  }) async {
+    try {
+      await _apiService.reviewClubJoinRequest(
+        requestId,
+        status: approve ? 'approved' : 'rejected',
+      );
+      _joinRequests.removeWhere((request) => request['_id']?.toString() == requestId);
+      notifyListeners();
+      return true;
+    } on Exception catch (error) {
+      _errorMessage = 'Unable to update join request: $error';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  List<Map<String, dynamic>> _extractClubList(Map<String, dynamic> payload) {
+    final raw = payload['data'] ??
+        payload['clubs'] ??
+        payload['results'] ??
+        payload['items'] ??
+        payload;
+
+    if (raw is List) {
+      return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+
+    if (raw is Map) {
+      final map = Map<String, dynamic>.from(raw);
+        final nested = map['clubs'] ??
+          map['data'] ??
+          map['results'] ??
+          map['items'];
+      if (nested is List) {
+        return nested.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+      if (map.containsKey('_id') || map.containsKey('name')) {
+        return [map];
+      }
+    }
+
+    return const [];
+  }
+
+  Map<String, dynamic> _extractClubMap(Map<String, dynamic> payload) {
+    final raw = payload['data'] ?? payload['club'] ?? payload;
+    if (raw is Map) {
+      return Map<String, dynamic>.from(raw);
+    }
+    throw const FormatException('Club payload is not a map');
+  }
+
+  Future<void> fetchOrganisers() async {
+    await fetchClubs();
   }
 
   void selectCategory(String category) {
     if (_selectedCategory == category) return;
     _selectedCategory = category;
     notifyListeners();
-    fetchOrganisers();
+    fetchClubs();
   }
 
   void updateSearch(String query) {
@@ -169,7 +283,7 @@ class ClubProvider extends ChangeNotifier {
     _selectedCategory = 'All';
     _searchQuery = '';
     notifyListeners();
-    fetchOrganisers();
+    fetchClubs();
   }
 
   void toggleJoin(String clubId) {

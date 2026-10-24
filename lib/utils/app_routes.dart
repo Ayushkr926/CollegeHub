@@ -17,6 +17,8 @@ import '../Screen/Auth/splash_screen.dart';
 import '../Screen/Auth/student_registration_screen.dart';
 import '../Screen/Auth/welcome_screen.dart';
 import '../Screen/Events/createevent.dart';
+import '../Screen/Events/events_screen.dart';
+import '../Screen/Events/registered_events_screen.dart';
 import '../notice/screens/splashscreen_notice.dart';
 import '../onboarding/onboarding_screen.dart';
 
@@ -44,6 +46,8 @@ class AppRoutes {
   static const String clubs = '/clubs';
   static const String request = '/request';
   static const String createevent = '/createevent';
+  static const String events = '/events';
+  static const String registeredEvents = '/events/registered';
   static const String noticehome = '/noticehome';
 
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
@@ -82,6 +86,10 @@ class AppRoutes {
         return _fadeRoute(const Requestscreen(), settings);
       case createevent:
         return _fadeRoute(const CreateEventScreen(), settings);
+      case events:
+        return _fadeRoute(const EventsScreen(), settings);
+      case registeredEvents:
+        return _fadeRoute(const RegisteredEventsScreen(), settings);
       case noticehome:
         return _fadeRoute(const HomeScreen_notice(), settings);
       default:

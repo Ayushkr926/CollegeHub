@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../../utils/app_constants.dart';
 
 /// Publish type for a notice.
 enum NoticePublishType { draft, now, scheduled }
@@ -259,9 +260,9 @@ class NoticeFormData {
       customTags: List<String>.from(notice.customTags),
       visibility: notice.visibility,
       targetCampuses: List<String>.from(notice.targetCampuses),
-      targetDepartments: List<String>.from(notice.targetDepartments),
-      targetYears: List<String>.from(notice.targetYears),
-      targetProgrammes: List<String>.from(notice.targetProgrammes),
+      targetDepartments: AppConstants.normalizeBranches(notice.targetDepartments),
+      targetYears: AppConstants.yearLabels(notice.targetYears),
+      targetProgrammes: AppConstants.normalizeCourses(notice.targetProgrammes),
       allowGuestAccess: notice.allowGuestAccess,
       publishType: notice.isDraft
           ? NoticePublishType.draft
@@ -375,9 +376,9 @@ class NoticeFormData {
       'customTags': customTags,
       'visibility': visibility.apiValue,
       'targetCampuses': targetCampuses,
-      'targetDepartments': targetDepartments,
-      'targetYears': targetYears,
-      'targetProgrammes': targetProgrammes,
+      'targetDepartments': AppConstants.normalizeBranches(targetDepartments),
+      'targetYears': AppConstants.normalizeYears(targetYears),
+      'targetProgrammes': AppConstants.normalizeCourses(targetProgrammes),
       'allowGuestAccess': allowGuestAccess,
       'publishType': publishType.apiValue,
       if (scheduledAt != null) 'scheduledAt': scheduledAt!.toIso8601String(),
@@ -616,9 +617,13 @@ class NoticeModel {
       customTags: parseStringList(json['customTags']),
       visibility: NoticeVisibilityX.fromApi(json['visibility']?.toString()),
       targetCampuses: parseStringList(json['targetCampuses']),
-      targetDepartments: parseStringList(json['targetDepartments']),
-      targetYears: parseStringList(json['targetYears']),
-      targetProgrammes: parseStringList(json['targetProgrammes']),
+      targetDepartments: AppConstants.normalizeBranches(
+        parseStringList(json['targetDepartments']),
+      ),
+      targetYears: AppConstants.yearLabels(parseStringList(json['targetYears'])),
+      targetProgrammes: AppConstants.normalizeCourses(
+        parseStringList(json['targetProgrammes']),
+      ),
       allowGuestAccess: json['allowGuestAccess'] == true,
       isDraft: json['isDraft'] == true || status == 'draft',
       isPublished: json['isPublished'] == true || status == 'published',
@@ -774,6 +779,7 @@ class NoticeQueryFilters {
 
   String? search;
   String? category;
+  String? status;
   List<String> tags;
   String? department;
   String? campus;
@@ -801,6 +807,7 @@ class NoticeQueryFilters {
     this.order = 'desc',
     this.search,
     this.category,
+    this.status,
     List<String>? tags,
     this.department,
     this.campus,
@@ -835,11 +842,12 @@ class NoticeQueryFilters {
     add('order', order);
     add('search', search);
     add('category', category);
+    add('status', status);
     add('tags', tags);
-    add('department', department);
+    add('department', department == null ? null : AppConstants.normalizeBranch(department));
     add('campus', campus);
-    add('programme', programme);
-    add('year', year);
+    add('programme', programme == null ? null : AppConstants.normalizeCourse(programme));
+    add('year', AppConstants.normalizeYear(year)?.toString());
     add('publisher', publisher);
     add('visibility', visibility?.apiValue);
     add('important', important);
@@ -863,6 +871,7 @@ class NoticeQueryFilters {
     String? order,
     String? search,
     String? category,
+    String? status,
     List<String>? tags,
     String? department,
     String? campus,
@@ -888,6 +897,7 @@ class NoticeQueryFilters {
       order: order ?? this.order,
       search: search ?? this.search,
       category: category ?? this.category,
+      status: status ?? this.status,
       tags: tags ?? List<String>.from(this.tags),
       department: department ?? this.department,
       campus: campus ?? this.campus,
@@ -910,6 +920,7 @@ class NoticeQueryFilters {
   bool get hasActiveFilters =>
       (search != null && search!.isNotEmpty) ||
       (category != null && category!.isNotEmpty) ||
+      (status != null && status!.isNotEmpty) ||
       tags.isNotEmpty ||
       (department != null && department!.isNotEmpty) ||
       (campus != null && campus!.isNotEmpty) ||

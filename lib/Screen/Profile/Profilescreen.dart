@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../Provider/profile_provider_student.dart';
+import '../../Provider/events_provider.dart';
+import '../../Screen/Events/eventdetail.dart';
+import '../../utils/app_routes.dart';
+import '../../widgets/home_event_card.dart';
 import '../../utils/topnotchclipper.dart';
 import 'completeprofile.dart';
 import 'edit_club_profile_screen.dart';
@@ -21,7 +25,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
   static const bg = Color(0xFF0E0E0E);
   static const card = Color(0xFF1A1A1A);
   static const subtitle = Color(0xFFA0A0A0);
-  static const accentRed = Color(0xFFE94B4B);
 
   @override
   void initState() {
@@ -31,8 +34,15 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     // Cache-first load: shows saved-from-login/registration data
     // instantly if present, then silently syncs with the API.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ProfileProvider>().loadProfile();
+      _loadProfileEvents();
     });
+  }
+
+  Future<void> _loadProfileEvents() async {
+    final profile = context.read<ProfileProvider>();
+    if (profile.id.isEmpty) await profile.loadProfile(isorganiser: true);
+    if (!mounted || profile.id.isEmpty) return;
+    await context.read<EventsProvider>().loadOrganizerEvents(profile.id);
   }
 
   @override
@@ -64,7 +74,9 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               const SliverToBoxAdapter(child: Divider(color: Color(0xFF2A2A2A))),
               SliverToBoxAdapter(child: _buildBio(profile)),
               SliverToBoxAdapter(child: _buildActionButtons(context, profile)),
-              SliverToBoxAdapter(child: _buildUpcomingEvents()),
+              SliverToBoxAdapter(
+                child: _buildUpcomingEvents(context, context.watch<EventsProvider>()),
+              ),
               SliverToBoxAdapter(child: _buildClubCore()),
               const SliverToBoxAdapter(child: SizedBox(height: 124)),
             ],
@@ -590,16 +602,19 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
   }
 
   // ---------- Upcoming events ----------
-  Widget _buildUpcomingEvents() {
+  Widget _buildUpcomingEvents(BuildContext context, EventsProvider provider) {
+    final upcoming = provider.events
+        .where((event) => event.eventDate.isAfter(DateTime.now()) && event.status != 'cancelled')
+        .toList();
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
+              const Text(
                 'Upcoming Events',
                 style: TextStyle(
                   color: Colors.white,
@@ -607,92 +622,28 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              Text('View All', style: TextStyle(color: subtitle, fontSize: 13)),
+              TextButton(
+                onPressed: () => Navigator.pushNamed(context, AppRoutes.events),
+                child: const Text('Manage', style: TextStyle(color: subtitle, fontSize: 13)),
+              ),
             ],
           ),
           const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: card,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 52,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF262626),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Column(
-                    children: [
-                      Text(
-                        '12',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      Text(
-                        'SEPT',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: subtitle, fontSize: 10),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Flutter Hackathon',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      SizedBox(height: 3),
-                      Text(
-                        '9:00 AM • Auditorium',
-                        style: TextStyle(color: subtitle, fontSize: 12),
-                      ),
-                      SizedBox(height: 3),
-                      Text(
-                        '120 Seats Left',
-                        style: TextStyle(
-                          color: accentRed,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+          if (provider.isLoading && upcoming.isEmpty)
+            const Center(child: CircularProgressIndicator())
+          else if (upcoming.isEmpty)
+            const Text('No upcoming events', style: TextStyle(color: subtitle))
+          else
+            ...upcoming.take(3).map((event) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: HomeEventCard(
+                    event: event,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => EventDetailScreen(event: event)),
                     ),
                   ),
-                  child: const Text('Register', style: TextStyle(fontSize: 12)),
-                ),
-              ],
-            ),
-          ),
+                )),
         ],
       ),
     );

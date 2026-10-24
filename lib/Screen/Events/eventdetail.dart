@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../Model/event_enums.dart';
 import '../../Model/event_model.dart';
+import '../../Provider/events_provider.dart';
+import '../../storage/local_storage.dart';
 
 const _bg = Color(0xFF121212);
 const _card = Color(0xFF1E1E1E);
@@ -22,20 +25,40 @@ class EventDetailScreen extends StatefulWidget {
 }
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
-  late int _quantity = widget.event.isFree ? 1 : 0;
   bool _bookmarked = false;
+  bool _isSubmitting = false;
+  bool _isStudent = false;
+  bool _isCheckingRegistration = true;
+  bool _isRegistered = false;
+  late EventModel _event = widget.event;
 
-  EventModel get event => widget.event;
+  EventModel get event => _event;
 
-  int get _maxQuantity {
-    // Cap personal registration quantity sensibly, never above the event's
-    // total capacity, and never more than 10 per person.
-    return event.maxParticipants > 0
-        ? (event.maxParticipants < 10 ? event.maxParticipants : 10)
-        : 10;
+  @override
+  void initState() {
+    super.initState();
+    _isStudent = LocalStorageService.instance.getString('role') == 'student';
+    _isCheckingRegistration = _isStudent && widget.event.id.isNotEmpty;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (_isCheckingRegistration) {
+        await context.read<EventsProvider>().loadMyRegistrations();
+        if (mounted) {
+          setState(() {
+            _isRegistered = context
+                .read<EventsProvider>()
+                .isRegisteredFor(widget.event.id);
+            _isCheckingRegistration = false;
+          });
+        }
+      }
+      if (widget.event.id.isNotEmpty) {
+        final updated = await context.read<EventsProvider>().getEventById(widget.event.id);
+        if (mounted && updated != null) setState(() => _event = updated);
+      }
+    });
   }
 
-  double get _totalAmount => (event.ticketPrice ?? 0) * _quantity;
+  double get _totalAmount => event.ticketPrice ?? 0;
 
   bool get _hasVenue =>
       event.mode != EventMode.online && event.venue.isNotEmpty;
@@ -118,17 +141,110 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
   }
 
-  void _buyOrRegister() {
-    if (!event.isFree && _quantity == 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Select at least 1 ticket')));
+  Future<void> _buyOrRegister() async {
+    if (!_isStudent) return;
+    if (event.id.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This event is not available for registration yet')),
+      );
       return;
     }
-    final msg = event.isFree
-        ? 'Registered for "${event.title}"'
-        : 'Bought $_quantity ticket(s) for "${event.title}"';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+
+    String? teamName;
+    List<String>? members;
+    if (event.isTeamEvent) {
+      final teamDetails = await _teamRegistrationDetails();
+      if (!mounted) return;
+      if (teamDetails == null) return;
+      teamName = teamDetails.$1;
+      members = teamDetails.$2;
+    }
+
+    setState(() => _isSubmitting = true);
+    try {
+      await context.read<EventsProvider>().register(
+            event.id,
+            teamName: teamName,
+            members: members,
+          );
+      if (!mounted) return;
+          setState(() => _isRegistered = true);
+          await context.read<EventsProvider>().loadMyRegistrations();
+          if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Registered for "${event.title}"')),
+      );
+    } on Exception catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Registration failed: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<(String, List<String>)?> _teamRegistrationDetails() async {
+    final teamNameController = TextEditingController();
+    final membersController = TextEditingController();
+    final result = await showDialog<(String, List<String>)>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: _card,
+        title: const Text('Team registration', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: teamNameController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: 'Team name', labelStyle: TextStyle(color: _muted)),
+            ),
+            TextField(
+              controller: membersController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: 'Member IDs, comma separated', labelStyle: TextStyle(color: _muted)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              final members = membersController.text
+                  .split(',')
+                  .map((value) => value.trim())
+                  .where((value) => value.isNotEmpty)
+                  .toList();
+              Navigator.pop(context, (teamNameController.text.trim(), members));
+            },
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    teamNameController.dispose();
+    membersController.dispose();
+    return result;
+  }
+
+  Future<void> _markAttended() async {
+    if (event.id.isEmpty) return;
+    try {
+      await context.read<EventsProvider>().attend(event.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Attendance recorded')),
+        );
+      }
+    } on Exception catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not record attendance: $error')),
+        );
+      }
+    }
   }
 
   @override
@@ -207,6 +323,22 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         ),
                     ],
                   ),
+                  if (event.tags.isNotEmpty || event.views > 0 || event.status.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (event.status.isNotEmpty) _Badge(text: event.status),
+                        if (event.views > 0) _Badge(text: '${event.views} views'),
+                        ...event.tags.map((tag) => _Badge(text: '#$tag')),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  _TicketRow(
+                    event: event,
+                  ),
                   const SizedBox(height: 20),
 
                   // ---------------- Quick info ----------------
@@ -250,6 +382,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       ),
                     ],
                   ),
+                  if (event.maxParticipants > 0) ...[
+                    const SizedBox(height: 12),
+                    _CapacityBar(
+                      used: event.participantsCount,
+                      total: event.maxParticipants,
+                    ),
+                  ],
                   const SizedBox(height: 24),
 
                   // ---------------- About ----------------
@@ -339,6 +478,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     onCall: _callHost,
                     onEmail: _emailHost,
                     onCopy: _copy,
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _markAttended,
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: const Text('Mark attendance'),
+                    style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
                   ),
                   const SizedBox(height: 24),
 
@@ -461,12 +607,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               ),
             ),
 
-            _BottomBar(
-              amount: _totalAmount,
-              isFree: event.isFree,
-              quantity: _quantity,
-              onPressed: _buyOrRegister,
-            ),
+            if (_isStudent && !_isRegistered && !_isCheckingRegistration)
+              _BottomBar(
+                amount: _totalAmount,
+                isFree: event.isFree,
+                isStudent: _isStudent,
+                onPressed: _isSubmitting ? null : _buyOrRegister,
+              ),
           ],
         ),
       ),
@@ -588,7 +735,16 @@ class _CoverImage extends StatelessWidget {
         aspectRatio: 16 / 10,
         child: event.coverImage != null
             ? Image.file(event.coverImage!, fit: BoxFit.cover)
-            : Container(
+            : event.coverImageUrl.isNotEmpty
+                ? Image.network(
+                    event.coverImageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: _card,
+                      child: const Center(child: Icon(Icons.image_outlined, color: _muted, size: 40)),
+                    ),
+                  )
+                : Container(
                 color: _card,
                 child: const Center(
                   child: Icon(Icons.image_outlined, color: _muted, size: 40),
@@ -1004,17 +1160,9 @@ class _ContactLine extends StatelessWidget {
 
 // ============================================================= Ticket row
 class _TicketRow extends StatelessWidget {
-  const _TicketRow({
-    required this.event,
-    required this.quantity,
-    required this.maxQuantity,
-    required this.onChanged,
-  });
+  const _TicketRow({required this.event});
 
   final EventModel event;
-  final int quantity;
-  final int maxQuantity;
-  final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1051,12 +1199,7 @@ class _TicketRow extends StatelessWidget {
               ],
             ),
           ),
-          _Stepper(
-            value: quantity,
-            min: 0,
-            max: maxQuantity,
-            onChanged: onChanged,
-          ),
+          const Text('1 attendee', style: TextStyle(color: _muted, fontSize: 12)),
         ],
       ),
     );
@@ -1068,60 +1211,6 @@ class _TicketRow extends StatelessWidget {
   }
 }
 
-class _Stepper extends StatelessWidget {
-  const _Stepper({
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.onChanged,
-  });
-
-  final int value;
-  final int min;
-  final int max;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _button(Icons.remove, value > min ? () => onChanged(value - 1) : null),
-        SizedBox(
-          width: 28,
-          child: Text(
-            '$value',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        _button(Icons.add, value < max ? () => onChanged(value + 1) : null),
-      ],
-    );
-  }
-
-  Widget _button(IconData icon, VoidCallback? onTap) {
-    final enabled = onTap != null;
-    return InkWell(
-      onTap: onTap,
-      customBorder: const CircleBorder(),
-      child: Container(
-        width: 30,
-        height: 30,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: enabled ? Colors.white : const Color(0xFF2A2A2A),
-        ),
-        child: Icon(icon, size: 15, color: enabled ? Colors.black : _muted),
-      ),
-    );
-  }
-}
-
 // ============================================================= Capacity bar
 class _CapacityBar extends StatelessWidget {
   const _CapacityBar({required this.used, required this.total});
@@ -1130,6 +1219,7 @@ class _CapacityBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (total <= 0) return const SizedBox.shrink();
     final ratio = (used / total).clamp(0.0, 1.0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1145,7 +1235,7 @@ class _CapacityBar extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          'Your selection: $used of $total spots',
+          '$used of $total spots registered',
           style: const TextStyle(color: _muted, fontSize: 11.5),
         ),
       ],
@@ -1158,14 +1248,14 @@ class _BottomBar extends StatelessWidget {
   const _BottomBar({
     required this.amount,
     required this.isFree,
-    required this.quantity,
+    required this.isStudent,
     required this.onPressed,
   });
 
   final double amount;
   final bool isFree;
-  final int quantity;
-  final VoidCallback onPressed;
+  final bool isStudent;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -1191,11 +1281,7 @@ class _BottomBar extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  isFree
-                      ? 'Total Amount'
-                      : (quantity > 0
-                            ? 'Total for $quantity ticket${quantity > 1 ? 's' : ''}'
-                            : 'Total Amount'),
+                  isFree ? 'Registration' : 'Per attendee',
                   style: const TextStyle(color: _muted, fontSize: 11.5),
                 ),
               ],
@@ -1215,7 +1301,7 @@ class _BottomBar extends StatelessWidget {
                   elevation: 0,
                 ),
                 child: Text(
-                  isFree ? 'Register Now' : 'Buy Ticket',
+                  isStudent ? 'Register Now' : 'Students only',
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,

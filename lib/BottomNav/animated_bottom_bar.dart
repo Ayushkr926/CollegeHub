@@ -81,12 +81,16 @@ class _AnimatedBottomBarState extends State<AnimatedBottomBar> {
                 Expanded(
                   child: NavItem(
                     icon: Icons.mail_outline_rounded,
-                    title: "Request",
+                    title: role == 'organiser' ? 'Requests' : 'Tickets',
                     active: selected == 1,
                     onTap: () {
                       setState(() => selected = 1);
                       Navigator.pushReplacementNamed(
-                          context, AppRoutes.request);
+                        context,
+                        role == 'organiser'
+                          ? AppRoutes.request
+                          : AppRoutes.registeredEvents,
+                        );
                     },
                   ),
                 ),
@@ -131,7 +135,12 @@ class _AnimatedBottomBarState extends State<AnimatedBottomBar> {
             top: 0,
             child: CenterFAB(
               onTap: () {
-                Navigator.pushNamed(context, AppRoutes.createevent);
+                Navigator.pushNamed(
+                  context,
+                  role == 'organiser' || role == 'admin'
+                      ? AppRoutes.createevent
+                      : AppRoutes.events,
+                );
               },
             ),
           ),

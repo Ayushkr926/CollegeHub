@@ -32,6 +32,16 @@ class Requestcard extends StatelessWidget {
     }
   }
 
+  String _timeAgo() {
+    final createdAt = DateTime.tryParse(request.timeago);
+    if (createdAt == null) return request.timeago;
+    final difference = DateTime.now().difference(createdAt);
+    if (difference.inMinutes < 1) return 'Just now';
+    if (difference.inHours < 1) return '${difference.inMinutes}m ago';
+    if (difference.inDays < 1) return '${difference.inHours}h ago';
+    return '${difference.inDays}d ago';
+  }
+
   @override
   Widget build(BuildContext context) {
     final isPending = request.status == RequestStatus.pending;
@@ -65,16 +75,21 @@ class Requestcard extends StatelessWidget {
                   radius: 26,
                   backgroundColor: AppColors.surfaceElevated,
                   child: ClipOval(
-                    child: Image.asset(
-                      request.image,
-                      width: 52,
-                      height: 52,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(
-                        Icons.person,
-                        color: Colors.white54,
-                      ),
-                    ),
+                    child: request.image.startsWith('http')
+                        ? Image.network(
+                            request.image,
+                            width: 52,
+                            height: 52,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white54),
+                          )
+                        : Image.asset(
+                            request.image,
+                            width: 52,
+                            height: 52,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white54),
+                          ),
                   ),
                 ),
               ),
@@ -108,7 +123,7 @@ class Requestcard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                request.timeago,
+                _timeAgo(),
                 style: const TextStyle(
                   color: AppColors.textFaint,
                   fontSize: 12,
@@ -118,6 +133,13 @@ class Requestcard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
+          if (request.clubName.isNotEmpty) ...[
+            Text(
+              'Requesting: ${request.clubName}',
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+          ],
           if (isPending)
             Row(
               children: [
